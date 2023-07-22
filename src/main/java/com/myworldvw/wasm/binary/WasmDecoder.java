@@ -1,13 +1,20 @@
 package com.myworldvw.wasm.binary;
 
+import com.myworldvw.wasm.WasmModule;
+import com.myworldvw.wasm.binary.sections.CustomSection;
 import com.myworldvw.wasm.util.Leb128;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Optional;
 
+/**
+ * This decoder assumes (as per https://webassembly.github.io/spec/core/appendix/implementation.html)
+ * that all table count limits are 2^32 - 1 (the maximum value of a signed integer), and that locals
+ * are limited to the maximum number of locals supported by the JVM (65,535).
+ */
 public class WasmDecoder {
-
+    public static final long SPLIT_BIT_MASK = 0x00_00_00_00_10_00_00_00L;
     public static final byte[] MAGIC = new byte[]{0x00, 0x61, 0x73, 0x6D};
 
     protected final ByteBuffer wasm;
@@ -54,6 +61,10 @@ public class WasmDecoder {
 
     public double decodeF64() throws WasmFormatException {
         return wasm.getDouble();
+    }
+
+    public String getName(){
+        return "";
     }
 
     public ValueType decodeValType(byte value) throws WasmFormatException {
@@ -106,5 +117,39 @@ public class WasmDecoder {
 
     public GlobalType decodeGlobalType() throws WasmFormatException {
         return new GlobalType(decodeValType(), decodeMutability());
+    }
+
+    public WasmModule decodeModule() throws WasmFormatException {
+
+        var module = new WasmModule();
+
+        while(wasm.hasRemaining()){
+            var id = wasm.get();
+            switch (id) {
+                case 0x00 -> module.addCustomSection(decodeCustomSection());
+                case 0x01 -> module.setTypeSection();
+                case 0x02 -> module.setImportSection();
+                case 0x03 -> module.setFunctionSection();
+                case 0x04 -> module.setTableSection();
+                case 0x05 -> module.setMemorySection();
+                case 0x06 -> module.setGlobalSection();
+                case 0x07 -> module.setExportSection();
+                case 0x08 -> module.setStartSection();
+                case 0x09 -> module.setElementSection();
+                case 0x10 -> module.setCodeSection();
+                case 0x11 -> module.setDataSection();
+                default -> throw new WasmFormatException(id, "module section");
+            }
+        }
+
+        return module;
+    }
+
+    public CustomSection decodeCustomSection() throws WasmFormatException {
+        return new CustomSection(null, null); // TODO
+    }
+
+    public TypeSection decodeTypeSection() throws WasmFormatException {
+
     }
 }
