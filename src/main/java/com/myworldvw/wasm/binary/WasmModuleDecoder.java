@@ -14,13 +14,13 @@ import java.util.function.Supplier;
  * that all table count limits are 2^32 - 1 (the maximum value of a signed integer), and that locals
  * are limited to the maximum number of locals supported by the JVM (65,535).
  */
-public class WasmDecoder {
+public class WasmModuleDecoder {
     public static final long SPLIT_BIT_MASK = 0x00_00_00_00_10_00_00_00L;
     public static final byte[] MAGIC = new byte[]{0x00, 0x61, 0x73, 0x6D};
 
     protected final ByteBuffer wasm;
 
-    public WasmDecoder(ByteBuffer wasm){
+    public WasmModuleDecoder(ByteBuffer wasm){
         this.wasm = wasm;
         wasm.order(ByteOrder.LITTLE_ENDIAN);
     }
