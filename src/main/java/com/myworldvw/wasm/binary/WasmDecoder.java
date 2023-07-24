@@ -6,7 +6,12 @@ import com.myworldvw.wasm.util.Leb128;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.IntFunction;
+import java.util.function.Supplier;
 
 /**
  * This decoder assumes (as per https://webassembly.github.io/spec/core/appendix/implementation.html)
@@ -63,8 +68,26 @@ public class WasmDecoder {
         return wasm.getDouble();
     }
 
-    public String getName(){
-        return "";
+    public <T> T[] decodeVec(IntFunction<T[]> factory, Supplier<T> elementDecoder) throws WasmFormatException {
+        var length = decodeU32();
+        var array = factory.apply(length);
+        for(int i = 0; i < length; i++){
+            array[i] = elementDecoder.get();
+        }
+        return array;
+    }
+
+    public byte[] decodeByteVec() throws WasmFormatException {
+        var length = decodeU32();
+        var array = new byte[length];
+        wasm.get(array);
+        return array;
+    }
+
+    public String decodeName() throws WasmFormatException {
+        return StandardCharsets.UTF_8
+                .decode(ByteBuffer.wrap(decodeByteVec()))
+                .toString();
     }
 
     public ValueType decodeValType(byte value) throws WasmFormatException {
@@ -79,6 +102,16 @@ public class WasmDecoder {
 
     public ValueType decodeValType() throws WasmFormatException {
         return decodeValType(wasm.get());
+    }
+
+    public FunctionType decodeFunctionType() throws WasmFormatException {
+        var value = wasm.get();
+        return switch (value){
+            case 0x60 -> new FunctionType(
+                    decodeVec(ValueType[]::new, this::decodeValType),
+                    decodeVec(ValueType[]::new, this::decodeValType));
+            default -> throw new WasmFormatException(value, "function type");
+        };
     }
 
     public Optional<ValueType> decodeBlockType() throws WasmFormatException {
@@ -96,6 +129,10 @@ public class WasmDecoder {
             case 0x01 -> new Limits(decodeU32(), decodeU32());
             default -> throw new WasmFormatException(value, "limit flag");
         };
+    }
+
+    public Import decodeImport() throws WasmFormatException {
+        return null; // TODO
     }
 
     public TableType decodeTableType() throws WasmFormatException {
@@ -127,7 +164,7 @@ public class WasmDecoder {
             var id = wasm.get();
             switch (id) {
                 case 0x00 -> module.addCustomSection(decodeCustomSection());
-                case 0x01 -> module.setTypeSection();
+                case 0x01 -> module.setTypeSection(decodeTypeSection());
                 case 0x02 -> module.setImportSection();
                 case 0x03 -> module.setFunctionSection();
                 case 0x04 -> module.setTableSection();
@@ -149,7 +186,13 @@ public class WasmDecoder {
         return new CustomSection(null, null); // TODO
     }
 
-    public TypeSection decodeTypeSection() throws WasmFormatException {
+    public FunctionType[] decodeTypeSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(FunctionType[]::new, this::decodeFunctionType);
+    }
 
+    public Import[] decodeImportSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(Import[]::new, this::decodeImport);
     }
 }

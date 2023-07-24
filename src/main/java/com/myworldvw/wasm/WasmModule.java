@@ -1,5 +1,6 @@
 package com.myworldvw.wasm;
 
+import com.myworldvw.wasm.binary.FunctionType;
 import com.myworldvw.wasm.binary.sections.CustomSection;
 
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ public class WasmModule {
     protected String name;
 
     protected final List<CustomSection> customSections;
+    protected FunctionType[] typeSection;
     protected long start;
 
     public WasmModule(){
@@ -18,5 +20,9 @@ public class WasmModule {
 
     public void addCustomSection(CustomSection section){
         customSections.add(section);
+    }
+
+    public void setTypeSection(FunctionType[] section){
+        typeSection = section;
     }
 }

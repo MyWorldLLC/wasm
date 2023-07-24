@@ -1,6 +1,6 @@
 package com.myworldvw.wasm.binary;
 
-public class WasmFormatException extends Exception {
+public class WasmFormatException extends RuntimeException {
 
     public WasmFormatException(String msg){
         super(msg);
