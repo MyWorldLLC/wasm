@@ -1,15 +1,11 @@
 package com.myworldvw.wasm.binary;
 
-import com.myworldvw.wasm.WasmModule;
-import com.myworldvw.wasm.binary.sections.CustomSection;
 import com.myworldvw.wasm.util.Leb128;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
@@ -79,7 +75,11 @@ public class WasmDecoder {
 
     public byte[] decodeByteVec() throws WasmFormatException {
         var length = decodeU32();
-        var array = new byte[length];
+        return readBytes(length);
+    }
+
+    public byte[] readBytes(int count) {
+        var array = new byte[count];
         wasm.get(array);
         return array;
     }
@@ -88,6 +88,10 @@ public class WasmDecoder {
         return StandardCharsets.UTF_8
                 .decode(ByteBuffer.wrap(decodeByteVec()))
                 .toString();
+    }
+
+    public int decodeId() throws WasmFormatException {
+        return decodeU32();
     }
 
     public ValueType decodeValType(byte value) throws WasmFormatException {
@@ -131,8 +135,42 @@ public class WasmDecoder {
         };
     }
 
+    public ImportDescriptor decodeImportDescriptor() throws WasmFormatException {
+        var value = wasm.get();
+        var payload = switch (value){
+            case 0x00 -> new TypeId(decodeId());
+            case 0x01 -> decodeTableType();
+            case 0x02 -> new MemoryType(decodeLimits());
+            case 0x03 -> decodeGlobalType();
+            default -> throw new WasmFormatException(value, "import descriptor type");
+        };
+        return new ImportDescriptor(payload);
+    }
+
     public Import decodeImport() throws WasmFormatException {
-        return null; // TODO
+        return new Import(decodeName(), decodeName(), decodeImportDescriptor());
+    }
+
+    public ExportDescriptor decodeExportDescriptor() throws WasmFormatException {
+        var value = wasm.get();
+        var payload = switch (value){
+            case 0x00 -> new FunctionId(decodeId());
+            case 0x01 -> new TableId(decodeId());
+            case 0x02 -> new MemoryId(decodeId());
+            case 0x03 -> new GlobalId(decodeId());
+            default -> throw new WasmFormatException(value, "export descriptor type");
+        };
+        return new ExportDescriptor(payload);
+    }
+
+    public Export decodeExport() throws WasmFormatException {
+        return new Export(decodeName(), decodeExportDescriptor());
+    }
+
+    public Code decodeCode() throws WasmFormatException {
+        var codeSize = decodeU32();
+        var binaryFunc = readBytes(codeSize);
+        return new Code(binaryFunc);
     }
 
     public TableType decodeTableType() throws WasmFormatException {
@@ -141,6 +179,10 @@ public class WasmDecoder {
             case 0x70 -> new TableType(ElementType.FUNC_REF, decodeLimits());
             default -> throw new WasmFormatException(value, "table type");
         };
+    }
+
+    public MemoryType decodeMemoryType() throws WasmFormatException {
+        return new MemoryType(decodeLimits());
     }
 
     public Mutability decodeMutability() throws WasmFormatException {
@@ -156,25 +198,25 @@ public class WasmDecoder {
         return new GlobalType(decodeValType(), decodeMutability());
     }
 
-    public WasmModule decodeModule() throws WasmFormatException {
+    public WasmBinaryModule decodeModule() throws WasmFormatException {
 
-        var module = new WasmModule();
+        var module = new WasmBinaryModule();
 
         while(wasm.hasRemaining()){
             var id = wasm.get();
             switch (id) {
                 case 0x00 -> module.addCustomSection(decodeCustomSection());
                 case 0x01 -> module.setTypeSection(decodeTypeSection());
-                case 0x02 -> module.setImportSection();
-                case 0x03 -> module.setFunctionSection();
-                case 0x04 -> module.setTableSection();
-                case 0x05 -> module.setMemorySection();
-                case 0x06 -> module.setGlobalSection();
-                case 0x07 -> module.setExportSection();
-                case 0x08 -> module.setStartSection();
-                case 0x09 -> module.setElementSection();
-                case 0x10 -> module.setCodeSection();
-                case 0x11 -> module.setDataSection();
+                case 0x02 -> module.setImportSection(decodeImportSection());
+                case 0x03 -> module.setFunctionSection(decodeFunctionSection());
+                case 0x04 -> module.setTableSection(decodeTableSection());
+                case 0x05 -> module.setMemorySection(decodeMemorySection());
+                case 0x06 -> module.setGlobalSection(decodeGlobalSection());
+                case 0x07 -> module.setExportSection(decodeExportSection());
+                case 0x08 -> module.setStart(decodeStart());
+                case 0x09 -> module.setElementSection(decodeElementSection());
+                case 0x10 -> module.setCodeSection(decodeCodeSection());
+                case 0x11 -> module.setDataSection(decodeDataSection());
                 default -> throw new WasmFormatException(id, "module section");
             }
         }
@@ -183,7 +225,14 @@ public class WasmDecoder {
     }
 
     public CustomSection decodeCustomSection() throws WasmFormatException {
-        return new CustomSection(null, null); // TODO
+        var sectionSize = decodeU32();
+        // name is a byte vector, so peek ahead so that we know how many bytes
+        // it will take up - that way we can isolate the contents of the custom
+        // section as a byte array.
+        int pos = wasm.position();
+        var nameSize = decodeU32();
+        wasm.position(pos);
+        return new CustomSection(decodeName(), readBytes(sectionSize - nameSize));
     }
 
     public FunctionType[] decodeTypeSection() throws WasmFormatException {
@@ -194,5 +243,50 @@ public class WasmDecoder {
     public Import[] decodeImportSection() throws WasmFormatException {
         var sectionSize = decodeU32();
         return decodeVec(Import[]::new, this::decodeImport);
+    }
+
+    public TypeId[] decodeFunctionSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(TypeId[]::new, () -> new TypeId(decodeId()));
+    }
+
+    public TableType[] decodeTableSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(TableType[]::new, this::decodeTableType);
+    }
+
+    public MemoryType[] decodeMemorySection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(MemoryType[]::new, this::decodeMemoryType);
+    }
+
+    public byte[] decodeGlobalSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return readBytes(sectionSize);
+    }
+
+    public Export[] decodeExportSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(Export[]::new, this::decodeExport);
+    }
+
+    public FunctionId decodeStart() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return new FunctionId(decodeId());
+    }
+
+    public byte[] decodeElementSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return readBytes(sectionSize);
+    }
+
+    public Code[] decodeCodeSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return decodeVec(Code[]::new, this::decodeCode);
+    }
+
+    public byte[] decodeDataSection() throws WasmFormatException {
+        var sectionSize = decodeU32();
+        return readBytes(sectionSize);
     }
 }

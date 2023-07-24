@@ -1,3 +1,3 @@
-package com.myworldvw.wasm.binary.sections;
+package com.myworldvw.wasm.binary;
 
 public record CustomSection(String name, byte[] content) {}
