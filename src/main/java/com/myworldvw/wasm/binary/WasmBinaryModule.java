@@ -1,6 +1,7 @@
 package com.myworldvw.wasm.binary;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class WasmBinaryModule {
@@ -22,6 +23,58 @@ public class WasmBinaryModule {
 
     public WasmBinaryModule(){
         customSections = new ArrayList<>();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public List<CustomSection> getCustomSections() {
+        return customSections;
+    }
+
+    public FunctionType[] getTypeSection() {
+        return typeSection;
+    }
+
+    public Import[] getImportSection() {
+        return importSection;
+    }
+
+    public TypeId[] getFunctionSection() {
+        return functionSection;
+    }
+
+    public TableType[] getTableSection() {
+        return tableSection;
+    }
+
+    public MemoryType[] getMemorySection() {
+        return memorySection;
+    }
+
+    public byte[] getGlobalSection() {
+        return globalSection;
+    }
+
+    public Export[] getExportSection() {
+        return exportSection;
+    }
+
+    public FunctionId getStart() {
+        return start;
+    }
+
+    public byte[] getElementSection() {
+        return elementSection;
+    }
+
+    public Code[] getCodeSection() {
+        return codeSection;
+    }
+
+    public byte[] getDataSection() {
+        return dataSection;
     }
 
     public void addCustomSection(CustomSection section){
@@ -70,5 +123,11 @@ public class WasmBinaryModule {
 
     public void setDataSection(byte[] section){
         dataSection = section;
+    }
+
+    public boolean isExported(FunctionId function){
+        return exportSection != null && Arrays.stream(exportSection)
+                .anyMatch(e -> e.descriptor().type() == ExportDescriptor.Type.FUNCTION_ID
+                        && e.descriptor().functionId().equals(function));
     }
 }

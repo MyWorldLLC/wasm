@@ -29,7 +29,7 @@ public record ExportDescriptor(Object payload) {
         }
     }
 
-    public FunctionId fucntionId(){
+    public FunctionId functionId(){
         return (FunctionId) payload;
     }
 

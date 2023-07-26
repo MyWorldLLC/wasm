@@ -1,6 +1,6 @@
 package com.myworldvw.wasm.binary;
 
-public class Opcodes {
+public class WasmOpcodes {
 
     // ==== Structure/Control ====
     public static final byte UNREACHABLE = 0x00;
