@@ -1,5 +1,6 @@
 package com.myworldvw.wasm;
 
+import com.myworldvw.wasm.binary.Import;
 import com.myworldvw.wasm.binary.WasmBinaryModule;
 import com.myworldvw.wasm.binary.WasmModuleDecoder;
 import com.myworldvw.wasm.jvm.JvmCompiler;
@@ -42,12 +43,16 @@ public class WasmContext {
         return cls;
     }
 
+    public Optional<WasmBinaryModule> findBinary(String moduleName){
+        return modules.stream().filter(m -> m.getName().equals(moduleName)).findFirst();
+    }
+
     public WasmModule findInstance(String moduleName){
         return instantiatedModules.stream().filter(m -> m.getName().equals(moduleName)).findFirst().get();
     }
 
     public WasmModule instantiate(String name) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
-        var instance = compile(name).getConstructor(String.class).newInstance(name);
+        var instance = compile(name).getConstructor(String.class, Import[].class).newInstance(name, findBinary(name).get().getImportSection());
         instantiatedModules.add(instance);
         return instance;
     }

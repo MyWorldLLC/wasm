@@ -24,21 +24,22 @@ public class JvmCompiler {
     public byte[] compile(WasmBinaryModule module) throws WasmFormatException {
 
         var moduleWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-        // TODO - name
         moduleWriter.visit(Opcodes.V19, Opcodes.ACC_PUBLIC, module.getName(), null, Type.getInternalName(WasmModule.class), null);
 
         // TODO - create table.
 
-        // TODO - create initializer. This must visit the global, element, and data sections
-        // and produce bytecode to run the initialization expressions in them.
         var constructor = moduleWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>",
-                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)), null, null);
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class), Type.getType(Import[].class)), null, null);
         constructor.visitCode();
 
         constructor.visitVarInsn(Opcodes.ALOAD, 0);
         constructor.visitVarInsn(Opcodes.ALOAD, 1);
+        constructor.visitVarInsn(Opcodes.ALOAD, 2);
         constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, Type.getInternalName(WasmModule.class), "<init>",
-                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)), false);
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class), Type.getType(Import[].class)), false);
+
+        // TODO - visit global, element, & data sections & perform applicable initialization.
+
         constructor.visitInsn(Opcodes.RETURN);
 
         constructor.visitEnd();
