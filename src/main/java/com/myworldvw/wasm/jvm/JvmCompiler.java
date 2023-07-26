@@ -1,6 +1,7 @@
 package com.myworldvw.wasm.jvm;
 
 import com.myworldvw.wasm.WasmExport;
+import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -16,9 +17,15 @@ public class JvmCompiler {
         this.config = config;
     }
 
-    public byte[] compile(String name, WasmBinaryModule module) throws WasmFormatException {
+    public WasmClassLoader getLoader(){
+        return config.loader;
+    }
+
+    public byte[] compile(WasmBinaryModule module) throws WasmFormatException {
 
         var moduleWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        // TODO - name
+        moduleWriter.visit(Opcodes.V19, Opcodes.ACC_PUBLIC, module.getName(), null, Type.getInternalName(WasmModule.class), null);
 
         // TODO - create table.
 
@@ -44,8 +51,8 @@ public class JvmCompiler {
             }
 
             methodWriter.visitCode();
-            var decoder = new WasmFunctionDecoder(code[i]);
-            decoder.decode(new JvmCodeVisitor(methodWriter, types[i]));
+            var decoder = new WasmFunctionDecoder(code[i], types[i]);
+            decoder.decode(new JvmCodeVisitor(methodWriter));
 
             methodWriter.visitMaxs(0, 0);
             methodWriter.visitEnd();

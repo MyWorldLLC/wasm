@@ -18,16 +18,15 @@ public class JvmCodeVisitor implements CodeVisitor {
     record BlockLabels(Label start, Label end){}
 
     protected final MethodVisitor code;
-    protected final FunctionType signature;
+    protected FunctionType signature;
     protected final Stack<Optional<ValueType>> blockTypes;
     protected final Stack<BlockLabels> blockLabels;
     // TODO - need to track operands across block frames
     protected final Stack<ValueType> operands;
     protected ValueType[] locals;
 
-    public JvmCodeVisitor(MethodVisitor code, FunctionType signature){
+    public JvmCodeVisitor(MethodVisitor code){
         this.code = code;
-        this.signature = signature;
         blockTypes = new Stack<>();
         blockLabels = new Stack<>();
         operands = new Stack<>();
@@ -40,10 +39,20 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void exitBlock() {
-        blockTypes.pop();
-        var labels = blockLabels.pop();
-        code.visitLabel(labels.end());
-        // TODO - pop operands
+        if(blockTypes.isEmpty()){
+            // Exiting the function body
+            makeReturn();
+        }else{
+            // Exiting an internal block
+            var labels = blockLabels.pop();
+            code.visitLabel(labels.end());
+            // TODO - pop operands
+        }
+    }
+
+    @Override
+    public void visitFunction(FunctionType type) {
+        signature = type;
     }
 
     @Override
@@ -68,17 +77,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     public void visitCtrl(byte opcode) {
         switch (opcode){
             case UNREACHABLE, NOP -> {}
-            case RETURN -> {
-                signature.returnType().ifPresentOrElse(
-                        t -> {
-                            switch (t) {
-                                case I32 -> code.visitInsn(Opcodes.IRETURN);
-                                case F32 -> code.visitInsn(Opcodes.FRETURN);
-                                case I64 -> code.visitInsn(Opcodes.LRETURN);
-                                case F64 -> code.visitInsn(Opcodes.DRETURN);
-                            }
-                        }, () -> code.visitInsn(Opcodes.RETURN));
-            }
+            case RETURN -> makeReturn();
         }
     }
 
@@ -176,7 +175,20 @@ public class JvmCodeVisitor implements CodeVisitor {
             }
             case I32_EQ -> testIntEquality(ValueType.I32);
             case I32_NE -> testIntInequality(ValueType.I32);
+            case I32_ADD -> addInts(ValueType.I32);
         }
+    }
+
+    protected void makeReturn(){
+        signature.returnType().ifPresentOrElse(
+                t -> {
+                    switch (t) {
+                        case I32 -> code.visitInsn(Opcodes.IRETURN);
+                        case F32 -> code.visitInsn(Opcodes.FRETURN);
+                        case I64 -> code.visitInsn(Opcodes.LRETURN);
+                        case F64 -> code.visitInsn(Opcodes.DRETURN);
+                    }
+                }, () -> code.visitInsn(Opcodes.RETURN));
     }
 
     protected void push(ValueType t){
@@ -246,5 +258,16 @@ public class JvmCodeVisitor implements CodeVisitor {
         pop();
         push(t);
 
+    }
+
+    protected void addInts(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.IADD);
+            case I64 -> code.visitInsn(Opcodes.LADD);
+        }
+
+        pop();
+        pop();
+        push(t);
     }
 }

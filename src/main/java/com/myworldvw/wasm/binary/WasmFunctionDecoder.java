@@ -3,6 +3,7 @@ package com.myworldvw.wasm.binary;
 import com.myworldvw.wasm.util.Leb128;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Stack;
@@ -13,28 +14,30 @@ import static com.myworldvw.wasm.binary.WasmOpcodes.F64_MAX;
 public class WasmFunctionDecoder {
 
     protected final ByteBuffer code;
+    protected final FunctionType type;
     protected final Stack<Optional<ValueType>> blockTypes;
 
-    public WasmFunctionDecoder(Code code){
+    public WasmFunctionDecoder(Code code, FunctionType type){
         this.code = ByteBuffer.wrap(code.binaryFunction());
+        this.code.order(ByteOrder.LITTLE_ENDIAN);
+        this.type = type;
         blockTypes = new Stack<>();
     }
 
     public void decode(CodeVisitor visitor) throws WasmFormatException {
-        var size = decodeU32();
+        visitor.visitFunction(type);
         visitor.visitLocals(decodeLocalVec());
         decodeExpression(visitor);
     }
 
     protected void decodeExpression(CodeVisitor visitor) throws WasmFormatException {
 
-        for(int ip = 0; ip < code.limit(); ip++){
+        for(int ip = 0; code.hasRemaining(); ip++){
             var opcode = code.get();
             switch (opcode){
                 case UNREACHABLE, NOP, RETURN -> visitor.visitCtrl(opcode);
                 case END -> {
                     visitor.exitBlock();
-                    blockTypes.pop();
                 }
                 case BLOCK, LOOP, IF -> {
                     var blockType = decodeBlockType();

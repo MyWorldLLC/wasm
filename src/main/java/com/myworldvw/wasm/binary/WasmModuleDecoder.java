@@ -20,24 +20,13 @@ public class WasmModuleDecoder {
 
     protected final ByteBuffer wasm;
 
+    public WasmModuleDecoder(byte[] bytes){
+        this(ByteBuffer.wrap(bytes));
+    }
+
     public WasmModuleDecoder(ByteBuffer wasm){
         this.wasm = wasm;
         wasm.order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    public void begin() throws WasmFormatException {
-        wasm.rewind();
-
-        for(int i = 0; i < MAGIC.length; i++){
-            if(wasm.get() != MAGIC[i]){
-                throw new WasmFormatException("Bad magic number. Is this a wasm module?");
-            }
-        }
-
-        var version = wasm.getInt();
-        if(version != 1){
-            throw new WasmFormatException("Unsupported wasm version %d. Only version 1.0 is currently supported.".formatted(version));
-        }
     }
 
     public int decodeI32() throws WasmFormatException {
@@ -198,9 +187,22 @@ public class WasmModuleDecoder {
         return new GlobalType(decodeValType(), decodeMutability());
     }
 
-    public WasmBinaryModule decodeModule() throws WasmFormatException {
+    public WasmBinaryModule decodeModule(String name) throws WasmFormatException {
 
-        var module = new WasmBinaryModule();
+        wasm.rewind();
+
+        for(int i = 0; i < MAGIC.length; i++){
+            if(wasm.get() != MAGIC[i]){
+                throw new WasmFormatException("Bad magic number. Is this a wasm module?");
+            }
+        }
+
+        var version = wasm.getInt();
+        if(version != 1){
+            throw new WasmFormatException("Unsupported wasm version %d. Only version 1.0 is currently supported.".formatted(version));
+        }
+
+        var module = new WasmBinaryModule(name);
 
         while(wasm.hasRemaining()){
             var id = wasm.get();
@@ -215,8 +217,8 @@ public class WasmModuleDecoder {
                 case 0x07 -> module.setExportSection(decodeExportSection());
                 case 0x08 -> module.setStart(decodeStart());
                 case 0x09 -> module.setElementSection(decodeElementSection());
-                case 0x10 -> module.setCodeSection(decodeCodeSection());
-                case 0x11 -> module.setDataSection(decodeDataSection());
+                case 0x0A -> module.setCodeSection(decodeCodeSection());
+                case 0x0B -> module.setDataSection(decodeDataSection());
                 default -> throw new WasmFormatException(id, "module section");
             }
         }

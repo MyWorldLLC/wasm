@@ -6,7 +6,7 @@ import java.util.List;
 
 public class WasmBinaryModule {
 
-    protected String name;
+    protected final String name;
 
     protected final List<CustomSection> customSections;
     protected FunctionType[] typeSection;
@@ -21,7 +21,8 @@ public class WasmBinaryModule {
     protected Code[] codeSection;
     protected byte[] dataSection;
 
-    public WasmBinaryModule(){
+    public WasmBinaryModule(String name){
+        this.name = name;
         customSections = new ArrayList<>();
     }
 
