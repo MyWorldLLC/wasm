@@ -11,10 +11,12 @@ public class Memory {
         ON_DEMAND, IMMEDIATE
     }
 
-    public static final ValueLayout.OfInt WASM_I32 = ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN);
-    public static final ValueLayout.OfLong WASM_I64 = ValueLayout.JAVA_LONG.withOrder(ByteOrder.LITTLE_ENDIAN);
-    public static final ValueLayout.OfFloat WASM_F32 = ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN);
-    public static final ValueLayout.OfDouble WASM_F64 = ValueLayout.JAVA_DOUBLE.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfByte WASM_I8 = ValueLayout.JAVA_BYTE.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfShort WASM_I16 = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfInt WASM_I32 = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfLong WASM_I64 = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfFloat WASM_F32 = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    public static final ValueLayout.OfDouble WASM_F64 = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     public static final int PAGE_SIZE = 65536;
     public static final int DEFAULT_PADDING_SIZE = 1024;
@@ -50,99 +52,147 @@ public class Memory {
         this.alignment = alignment;
     }
 
-    public int readI32(int addr){
+    public byte readI8(int addr){
         try{
-            return memory.get(WASM_I32, addr);
+            return memory.get(WASM_I8, addr);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            return memory.get(WASM_I32, addr);
+            return memory.get(WASM_I8, addr);
+        }
+    }
+
+    public void writeI8(int addr, short value){
+        try{
+            memory.setAtIndex(WASM_I16, addr, value);
+        }catch (IndexOutOfBoundsException e){
+            if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
+                throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
+            }
+            reallocate(addr);
+            memory.setAtIndex(WASM_I16, addr, value);
+        }
+    }
+
+    public short readI16(int addr){
+        try{
+            return memory.getAtIndex(WASM_I16, addr);
+        }catch (IndexOutOfBoundsException e){
+            if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
+                throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
+            }
+            reallocate(addr);
+            return memory.getAtIndex(WASM_I16, addr);
+        }
+    }
+
+    public void writeI16(int addr, short value){
+        try{
+            memory.setAtIndex(WASM_I16, addr, value);
+        }catch (IndexOutOfBoundsException e){
+            if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
+                throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
+            }
+            reallocate(addr);
+            memory.setAtIndex(WASM_I16, addr, value);
+        }
+    }
+
+    public int readI32(int addr){
+        try{
+            return memory.getAtIndex(WASM_I32, addr);
+        }catch (IndexOutOfBoundsException e){
+            if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
+                throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
+            }
+            reallocate(addr);
+            return memory.getAtIndex(WASM_I32, addr);
         }
     }
 
     public void writeI32(int addr, int value){
         try{
-            memory.set(WASM_I32, addr, value);
+            memory.setAtIndex(WASM_I32, addr, value);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            memory.set(WASM_I32, addr, value);
+            memory.setAtIndex(WASM_I32, addr, value);
         }
     }
 
     public long readI64(int addr){
         try{
-            return memory.get(WASM_I64, addr);
+            return memory.getAtIndex(WASM_I64, addr);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            return memory.get(WASM_I64, addr);
+            return memory.getAtIndex(WASM_I64, addr);
         }
     }
 
     public void writeI64(int addr, long value){
         try{
-            memory.set(WASM_I64, addr, value);
+            memory.setAtIndex(WASM_I64, addr, value);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            memory.set(WASM_I64, addr, value);
+            memory.setAtIndex(WASM_I64, addr, value);
         }
     }
 
     public float readF32(int addr){
         try{
-            return memory.get(WASM_F32, addr);
+            return memory.getAtIndex(WASM_F32, addr);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            return memory.get(WASM_F32, addr);
+            return memory.getAtIndex(WASM_F32, addr);
         }
     }
 
     public void writeF32(int addr, float value){
         try{
-            memory.set(WASM_F32, addr, value);
+            memory.setAtIndex(WASM_F32, addr, value);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            memory.set(WASM_F32, addr, value);
+            memory.setAtIndex(WASM_F32, addr, value);
         }
     }
 
     public double readF64(int addr){
         try{
-            return memory.get(WASM_F64, addr);
+            return memory.getAtIndex(WASM_F64, addr);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            return memory.get(WASM_F64, addr);
+            return memory.getAtIndex(WASM_F64, addr);
         }
     }
 
     public void writeF64(int addr, double value){
         try{
-            memory.set(WASM_F64, addr, value);
+            memory.setAtIndex(WASM_F64, addr, value);
         }catch (IndexOutOfBoundsException e){
             if(limits != null && limits.hasMax() && addr > limits.max() * PAGE_SIZE){
                 throw new SegmentationException("Address 0x032%X is out of bounds (max 0x032%X)".formatted(addr, limits.max() * PAGE_SIZE));
             }
             reallocate(addr);
-            memory.set(WASM_F64, addr, value);
+            memory.setAtIndex(WASM_F64, addr, value);
         }
     }
 
@@ -154,15 +204,29 @@ public class Memory {
                 ? (long) pages * PAGE_SIZE
                 : calculateOnDemandAllocation(addr);
 
+        if(growBytes(allocSize) == -1){
+            throw new SegmentationException("Cannot expand allocated memory: requested %d, maximum limit is %d".formatted(allocSize, limits.max() * PAGE_SIZE));
+        }
+    }
+
+    public int size(){
+        return pages;
+    }
+
+    public int grow(int newPages){
+        return growBytes((long) newPages * PAGE_SIZE);
+    }
+
+    public synchronized int growBytes(long byteSize){
         if(limits != null){
-            if(limits.hasMax() && limits.max() < allocSize){
-                throw new SegmentationException("Cannot expand allocated memory: requested %d, maximum limit is %d".formatted(allocSize, limits.max()));
+            if(limits.hasMax() && limits.max() < byteSize * PAGE_SIZE){
+                return -1;
             }
-            allocSize = Math.max(allocSize, limits.min());
+            byteSize = Math.max(byteSize, (long) limits.min() * PAGE_SIZE);
         }
 
         var newAllocator = Arena.openShared();
-        var newMemory = newAllocator.allocate(allocSize, alignment);
+        var newMemory = newAllocator.allocate(byteSize, alignment);
 
         if(memory != null){
             newMemory.copyFrom(memory);
@@ -174,10 +238,39 @@ public class Memory {
 
         allocator = newAllocator;
         memory = newMemory;
+
+        var oldPages = pages;
+        pages = (int) (byteSize / PAGE_SIZE + 1);
+
+        return oldPages;
     }
 
     protected long calculateOnDemandAllocation(int addr){
         long count = addr / paddingSize + 1; // number of "paddingSize" segments we must have
         return count * paddingSize;
+    }
+
+    public static void staticWriteI8(int baseAddr, byte value, Memory mem, int offsetAddr){
+        mem.writeI8(baseAddr + offsetAddr, value);
+    }
+
+    public static void staticWriteI16(int baseAddr, short value, Memory mem, int offsetAddr){
+        mem.writeI16(baseAddr + offsetAddr, value);
+    }
+
+    public static void staticWriteI32(int baseAddr, int value, Memory mem, int offsetAddr){
+        mem.writeI32(baseAddr + offsetAddr, value);
+    }
+
+    public static void staticWriteI64(int baseAddr, long value, Memory mem, int offsetAddr){
+        mem.writeI64(baseAddr + offsetAddr, value);
+    }
+
+    public static void staticWriteF32(int baseAddr, float value, Memory mem, int offsetAddr){
+        mem.writeF32(baseAddr + offsetAddr, value);
+    }
+
+    public static void staticWriteF64(int baseAddr, double value, Memory mem, int offsetAddr){
+        mem.writeF64(baseAddr + offsetAddr, value);
     }
 }

@@ -67,7 +67,7 @@ public class JvmCompiler {
 
             methodWriter.visitCode();
             var decoder = new WasmFunctionDecoder(code[i], types[i]);
-            decoder.decode(new JvmCodeVisitor(methodWriter));
+            decoder.decode(new JvmCodeVisitor(module.getName(), methodWriter));
 
             methodWriter.visitMaxs(0, 0);
             methodWriter.visitEnd();

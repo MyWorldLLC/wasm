@@ -1,5 +1,6 @@
 package com.myworldvw.wasm.jvm;
 
+import com.myworldvw.wasm.Memory;
 import com.myworldvw.wasm.binary.CodeVisitor;
 import com.myworldvw.wasm.binary.FunctionType;
 import com.myworldvw.wasm.binary.ValueType;
@@ -17,6 +18,8 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     record BlockLabels(Label start, Label end){}
 
+    protected final String moduleClassName;
+
     protected final MethodVisitor code;
     protected FunctionType signature;
     protected final Stack<Optional<ValueType>> blockTypes;
@@ -25,7 +28,8 @@ public class JvmCodeVisitor implements CodeVisitor {
     protected final Stack<ValueType> operands;
     protected ValueType[] locals;
 
-    public JvmCodeVisitor(MethodVisitor code){
+    public JvmCodeVisitor(String moduleClassName, MethodVisitor code){
+        this.moduleClassName = moduleClassName;
         this.code = code;
         blockTypes = new Stack<>();
         blockLabels = new Stack<>();
@@ -145,7 +149,44 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitMemory(byte opcode, int align, int offset) {
-
+        switch (opcode){
+            case I32_LOAD -> makeILoad(ValueType.I32, 32, align, offset, true);
+            case I64_LOAD -> makeILoad(ValueType.I64, 64, align, offset, true);
+            case F32_LOAD -> makeFLoad(ValueType.F32, align, offset);
+            case F64_LOAD -> makeFLoad(ValueType.F64, align, offset);
+            case I32_LOAD_8_S -> makeILoad(ValueType.I32, 8, align, offset, true);
+            case I32_LOAD_8_U -> makeILoad(ValueType.I32, 8, align, offset, false);
+            case I32_LOAD_16_S -> makeILoad(ValueType.I32, 16, align, offset, true);
+            case I32_LOAD_16_U -> makeILoad(ValueType.I32, 16, align, offset, false);
+            case I64_LOAD_8_S -> makeILoad(ValueType.I64, 8, align, offset, true);
+            case I64_LOAD_8_U -> makeILoad(ValueType.I64, 8, align, offset, false);
+            case I64_LOAD_16_S -> makeILoad(ValueType.I64, 16, align, offset, true);
+            case I64_LOAD_16_U -> makeILoad(ValueType.I64, 16, align, offset, false);
+            case I64_LOAD_32_S -> makeILoad(ValueType.I64, 32, align, offset, true);
+            case I64_LOAD_32_U -> makeILoad(ValueType.I64, 32, align, offset, false);
+            case I32_STORE -> makeIStore(ValueType.I32, 32, align, offset);
+            case I64_STORE -> makeIStore(ValueType.I64, 64, align, offset);
+            case F32_STORE -> makeFStore(ValueType.F32, align, offset);
+            case F64_STORE -> makeFStore(ValueType.F64, align, offset);
+            case I32_STORE_8 -> makeIStore(ValueType.I32, 8, align, offset);
+            case I32_STORE_16 -> makeIStore(ValueType.I32, 16, align, offset);
+            case I64_STORE_8 -> makeIStore(ValueType.I64, 8, align, offset);
+            case I64_STORE_16 -> makeIStore(ValueType.I64, 16, align, offset);
+            case I64_STORE_32 -> makeIStore(ValueType.I64, 32, align, offset);
+            case MEMORY_SIZE -> {
+                pushMemory();
+                code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class), "size",
+                        Type.getMethodDescriptor(Type.INT_TYPE), false);
+                push(ValueType.I32);
+            }
+            case MEMORY_GROW -> {
+                pushMemory();
+                code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class), "grow",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+                pop();
+                push(ValueType.I32);
+            }
+        }
     }
 
     @Override
@@ -281,5 +322,159 @@ public class JvmCodeVisitor implements CodeVisitor {
         pop();
         pop();
         push(t);
+    }
+
+    protected void pushMemory(){
+        code.visitVarInsn(Opcodes.ALOAD, 0);
+        code.visitFieldInsn(Opcodes.GETFIELD, moduleClassName, "memory0", Type.getDescriptor(Memory.class));
+    }
+
+    protected void makeILoad(ValueType target, int storedWidth, int align, int offset, boolean signed){
+        // At some point in the future we may use the 'align' argument, but the underlying memory segment
+        // already handles enforcing alignment for us so we can safely ignore it for now.
+        pushMemory();
+        code.visitInsn(Opcodes.SWAP);
+        code.visitLdcInsn(offset);
+        code.visitInsn(Opcodes.IADD);
+        switch (target){
+            case I32 -> {
+                switch (storedWidth){
+                    case 8 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI8", Type.getMethodDescriptor(Type.BYTE_TYPE, Type.INT_TYPE), false);
+                        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Byte.class),
+                                signed ? "intValue" : "toUnsignedInt", Type.getMethodDescriptor(Type.INT_TYPE, Type.BYTE_TYPE), false);
+                    }
+                    case 16 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI16", Type.getMethodDescriptor(Type.SHORT_TYPE, Type.INT_TYPE), false);
+                        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Short.class),
+                                signed ? "intValue" : "toUnsignedInt", Type.getMethodDescriptor(Type.INT_TYPE, Type.SHORT_TYPE), false);
+                    }
+                    case 32 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI32", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+                    }
+                }
+            }
+            case I64 -> {
+                switch (storedWidth){
+                    case 8 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI8", Type.getMethodDescriptor(Type.BYTE_TYPE, Type.INT_TYPE), false);
+                        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Byte.class),
+                                signed ? "longValue" : "toUnsignedLong", Type.getMethodDescriptor(Type.LONG_TYPE, Type.BYTE_TYPE), false);
+                    }
+                    case 16 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI16", Type.getMethodDescriptor(Type.SHORT_TYPE, Type.INT_TYPE), false);
+                        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Short.class),
+                                signed ? "longValue" : "toUnsignedLong", Type.getMethodDescriptor(Type.LONG_TYPE, Type.SHORT_TYPE), false);
+                    }
+                    case 32 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI32", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+                        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                                signed ? "longValue" : "toUnsignedLong", Type.getMethodDescriptor(Type.LONG_TYPE, Type.INT_TYPE), false);
+                    }
+                    case 64 -> {
+                        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                                "readI64", Type.getMethodDescriptor(Type.LONG_TYPE, Type.INT_TYPE), false);
+                    }
+                }
+            }
+        }
+
+        pop();
+        push(target);
+    }
+
+    protected void makeIStore(ValueType target, int storedWidth, int align, int offset){
+        // Note that stores can shorten but never widen the value - that is,
+        // a 32-bit can be stored as 16 or 8, but never 64 (likewise for 64-bit)
+        // stack: addr, value
+
+        String storageMethod = "";
+        Type storageType = Type.LONG_TYPE;
+
+        // If we are storing a 64-bit, first shorten to 32
+        if(target == ValueType.I64 && storedWidth < 64){
+            code.visitInsn(Opcodes.L2I);
+        }
+
+        // At this point we have an integer value on the stack if shortening is happening
+        switch (storedWidth){
+            case 8 -> {
+                // truncate to byte
+                code.visitInsn(Opcodes.I2B);
+                storageMethod = "staticWriteI8";
+                storageType = Type.BYTE_TYPE;
+            }
+            case 16 -> {
+                code.visitInsn(Opcodes.I2S);
+                storageMethod = "staticWriteI16";
+                storageType = Type.SHORT_TYPE;
+            }
+            case 32 -> {
+                storageMethod = "staticWriteI32";
+                storageType = Type.INT_TYPE;
+            }
+            case 64 -> {
+                storageMethod = "staticWriteI64";
+                storageType = Type.LONG_TYPE;
+            }
+        }
+
+        // Shuffling the stack around is quite tricky (especially when dealing with 64-bit values), so use the
+        // helper methods. Performance with this should be OK since the JIT will most likely just inline it.
+        pushMemory();
+        code.visitLdcInsn(offset);
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Memory.class), storageMethod,
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, storageType, Type.getType(Memory.class), Type.INT_TYPE), false);
+
+        pop();
+        pop();
+    }
+
+    protected void makeFLoad(ValueType target, int align, int offset){
+        pushMemory();
+        code.visitInsn(Opcodes.SWAP);
+        code.visitLdcInsn(offset);
+        code.visitInsn(Opcodes.IADD);
+
+        switch (target){
+            case F32 -> code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                    "readF32", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.INT_TYPE), false);
+            case F64 -> code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                    "readF64", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.INT_TYPE), false);
+        }
+
+        pop();
+        push(target);
+    }
+
+    protected void makeFStore(ValueType target, int align, int offset){
+
+        String storageMethod = "";
+        Type storageType = Type.DOUBLE_TYPE;
+
+        switch (target){
+            case F32 -> {
+                storageMethod = "staticWriteF32";
+                storageType = Type.FLOAT_TYPE;
+            }
+            case F64 -> {
+                storageMethod = "staticWriteF64";
+                storageType = Type.DOUBLE_TYPE;
+            }
+        }
+
+        pushMemory();
+        code.visitLdcInsn(offset);
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Memory.class), storageMethod,
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, storageType, Type.getType(Memory.class), Type.INT_TYPE), false);
+
+        pop();
+        pop();
     }
 }
