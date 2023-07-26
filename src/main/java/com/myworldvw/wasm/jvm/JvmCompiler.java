@@ -31,6 +31,18 @@ public class JvmCompiler {
 
         // TODO - create initializer. This must visit the global, element, and data sections
         // and produce bytecode to run the initialization expressions in them.
+        var constructor = moduleWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>",
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)), null, null);
+        constructor.visitCode();
+
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitVarInsn(Opcodes.ALOAD, 1);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, Type.getInternalName(WasmModule.class), "<init>",
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)), false);
+        constructor.visitInsn(Opcodes.RETURN);
+
+        constructor.visitEnd();
+        constructor.visitMaxs(0, 0);
 
         // Visit functions. Exported functions will be public and annotated with @WasmExport,
         // non-exported functions should be private.
@@ -39,12 +51,14 @@ public class JvmCompiler {
         var code = module.getCodeSection();
         for(int i = 0; i < code.length; i++){
             var id = new FunctionId(i);
-            var isExported = module.isExported(id);
+            var export = module.getExportedName(id);
 
-            var access = isExported ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PRIVATE;
+            var access = export.isPresent() ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PRIVATE;
 
-            var methodWriter = moduleWriter.visitMethod(access, "", typeToDescriptor(types[i]), null, null);
-            if(isExported){
+            var name = module.getExportedName(id).orElse("function$" + id.id());
+
+            var methodWriter = moduleWriter.visitMethod(access, name, typeToDescriptor(types[i]), null, null);
+            if(export.isPresent()){
                 var exportVisitor = methodWriter.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
                     exportVisitor.visit("functionId", i);
                     exportVisitor.visitEnd();

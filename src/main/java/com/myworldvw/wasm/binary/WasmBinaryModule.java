@@ -3,6 +3,7 @@ package com.myworldvw.wasm.binary;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 public class WasmBinaryModule {
 
@@ -130,5 +131,17 @@ public class WasmBinaryModule {
         return exportSection != null && Arrays.stream(exportSection)
                 .anyMatch(e -> e.descriptor().type() == ExportDescriptor.Type.FUNCTION_ID
                         && e.descriptor().functionId().equals(function));
+    }
+
+    public Optional<String> getExportedName(FunctionId function){
+        if(exportSection == null){
+            return Optional.empty();
+        }
+
+        return Arrays.stream(exportSection)
+                .filter(e -> e.descriptor().type() == ExportDescriptor.Type.FUNCTION_ID
+                    && e.descriptor().functionId().equals(function))
+                .map(Export::name)
+                .findFirst();
     }
 }

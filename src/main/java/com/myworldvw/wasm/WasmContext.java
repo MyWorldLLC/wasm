@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -45,8 +46,8 @@ public class WasmContext {
         return instantiatedModules.stream().filter(m -> m.getName().equals(moduleName)).findFirst().get();
     }
 
-    public WasmModule instantiate(String name) throws InstantiationException, IllegalAccessException {
-        var instance = compile(name).newInstance(); // TODO
+    public WasmModule instantiate(String name) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+        var instance = compile(name).getConstructor(String.class).newInstance(name);
         instantiatedModules.add(instance);
         return instance;
     }
@@ -83,7 +84,7 @@ public class WasmContext {
         }
     }
 
-    public void instantiateAll() throws InstantiationException, IllegalAccessException {
+    public void instantiateAll() throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
         for(var module : modules){
             instantiate(module.getName());
         }

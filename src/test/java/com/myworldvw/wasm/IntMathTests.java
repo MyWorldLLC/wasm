@@ -10,8 +10,8 @@ public class IntMathTests {
     @Test
     void addsIntegers() throws Throwable {
         var ctx = WasmLoader.createFromResources("/wasm/addToThree.wasm");
-        ctx.instantiate("demo");
-        var handle = ctx.getExportedFunction("demo", "add").get();
+        ctx.instantiate("addToThree");
+        var handle = ctx.getExportedFunction("addToThree", "add").get();
 
         assertEquals(3, (int) handle.invokeExact());
     }
