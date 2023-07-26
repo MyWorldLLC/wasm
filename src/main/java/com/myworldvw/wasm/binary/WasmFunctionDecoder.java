@@ -32,12 +32,17 @@ public class WasmFunctionDecoder {
 
     protected void decodeExpression(CodeVisitor visitor) throws WasmFormatException {
 
-        for(int ip = 0; code.hasRemaining(); ip++){
+        while(code.hasRemaining()){
             var opcode = code.get();
             switch (opcode){
                 case UNREACHABLE, NOP, RETURN -> visitor.visitCtrl(opcode);
                 case END -> {
-                    visitor.exitBlock();
+                    if(blockTypes.isEmpty()){
+                        visitor.exitFunction();
+                    }else{
+                        visitor.exitBlock();
+                        blockTypes.pop();
+                    }
                 }
                 case BLOCK, LOOP, IF -> {
                     var blockType = decodeBlockType();

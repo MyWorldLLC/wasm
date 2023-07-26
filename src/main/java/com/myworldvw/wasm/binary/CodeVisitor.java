@@ -6,6 +6,7 @@ public interface CodeVisitor {
 
     void visitLocals(ValueType[] locals);
     void exitBlock();
+    void exitFunction();
     void visitFunction(FunctionType type);
     void visitBlock(byte opcode, Optional<ValueType> blockType);
     void visitBranch(byte opcode, int labelId);

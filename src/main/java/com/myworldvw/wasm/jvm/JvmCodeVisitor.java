@@ -39,15 +39,16 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void exitBlock() {
-        if(blockTypes.isEmpty()){
-            // Exiting the function body
-            makeReturn();
-        }else{
-            // Exiting an internal block
-            var labels = blockLabels.pop();
-            code.visitLabel(labels.end());
-            // TODO - pop operands
-        }
+        // Exiting an internal block
+        var labels = blockLabels.pop();
+        code.visitLabel(labels.end());
+        // TODO - pop operands
+    }
+
+    @Override
+    public void exitFunction(){
+        // Exiting the function body
+        makeReturn();
     }
 
     @Override
