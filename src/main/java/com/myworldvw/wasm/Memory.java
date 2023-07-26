@@ -52,6 +52,18 @@ public class Memory {
         this.alignment = alignment;
     }
 
+    public void memset(byte value){
+        memory.fill(value);
+    }
+
+    public void memset(int addr, byte value){
+        memory.asSlice(addr).fill(value);
+    }
+
+    public void memset(int addr, long length, byte value){
+        memory.asSlice(addr, length).fill(value);
+    }
+
     public byte readI8(int addr){
         try{
             return memory.get(WASM_I8, addr);
@@ -227,6 +239,7 @@ public class Memory {
 
         var newAllocator = Arena.openShared();
         var newMemory = newAllocator.allocate(byteSize, alignment);
+        newMemory.fill((byte)0);
 
         if(memory != null){
             newMemory.copyFrom(memory);
