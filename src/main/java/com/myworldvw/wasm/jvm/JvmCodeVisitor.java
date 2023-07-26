@@ -103,9 +103,12 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitVar(byte opcode, int id) {
+        var type = paramOrLocal(id);
+        id = id + 1; // offset by 1 since l0 is always 'this'
         switch (opcode){
             case LOCAL_GET -> {
-                switch (locals[id]){
+                push(type);
+                switch (type){
                     // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ILOAD, id);
                     case F32 -> code.visitVarInsn(Opcodes.FLOAD, id);
@@ -114,7 +117,8 @@ public class JvmCodeVisitor implements CodeVisitor {
                 }
             }
             case LOCAL_SET -> {
-                switch (locals[id]){
+                pop();
+                switch (type){
                     // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ISTORE, id);
                     case F32 -> code.visitVarInsn(Opcodes.FSTORE, id);
@@ -124,7 +128,7 @@ public class JvmCodeVisitor implements CodeVisitor {
             }
             case LOCAL_TEE -> {
                 code.visitInsn(Opcodes.DUP); // TODO - this is probably wrong with long/double
-                switch (locals[id]){
+                switch (type){
                     // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ISTORE, id);
                     case F32 -> code.visitVarInsn(Opcodes.FSTORE, id);
@@ -189,6 +193,13 @@ public class JvmCodeVisitor implements CodeVisitor {
                         case F64 -> code.visitInsn(Opcodes.DRETURN);
                     }
                 }, () -> code.visitInsn(Opcodes.RETURN));
+    }
+
+    protected ValueType paramOrLocal(int id){
+        if(id < signature.params().length){
+            return signature.params()[id];
+        }
+        return locals[id];
     }
 
     protected void push(ValueType t){

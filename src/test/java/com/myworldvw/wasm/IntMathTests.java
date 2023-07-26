@@ -16,4 +16,13 @@ public class IntMathTests {
         assertEquals(3, (int) handle.invokeExact());
     }
 
+    @Test
+    void addsIntegerParams() throws Throwable {
+        var ctx = WasmLoader.createFromResources("/wasm/addI32Params.wasm");
+        ctx.instantiate("addI32Params");
+        var handle = ctx.getExportedFunction("addI32Params", "add").get();
+
+        assertEquals(7, (int) handle.invokeExact(4, 3));
+    }
+
 }
