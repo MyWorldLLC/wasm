@@ -23,10 +23,10 @@ public class JvmCompiler {
 
     public byte[] compile(WasmBinaryModule module) throws WasmFormatException {
 
+        // TODO - build function lookup (for resolving function ids) before starting compilation
+
         var moduleWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         moduleWriter.visit(Opcodes.V19, Opcodes.ACC_PUBLIC, module.getName(), null, Type.getInternalName(WasmModule.class), null);
-
-        // TODO - create table.
 
         var constructor = moduleWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>",
                 Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class), Type.getType(Import[].class)), null, null);

@@ -1,6 +1,8 @@
 package com.myworldvw.wasm.jvm;
 
 import com.myworldvw.wasm.Memory;
+import com.myworldvw.wasm.Table;
+import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.CodeVisitor;
 import com.myworldvw.wasm.binary.FunctionType;
 import com.myworldvw.wasm.binary.ValueType;
@@ -9,6 +11,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.util.Optional;
 import java.util.Stack;
 
@@ -89,8 +92,16 @@ public class JvmCodeVisitor implements CodeVisitor {
     @Override
     public void visitCall(byte opcode, int target) {
         switch (opcode) {
-            case CALL -> {}
-            case CALL_INDIRECT -> {}
+            case CALL -> {
+                // TODO - determine if this is a local or imported function. Locally declared functions
+                // will be accessed as direct method calls, imported functions will be stored and
+                // invoked via method handle.
+            }
+            case CALL_INDIRECT -> {
+                getFromTable(target);
+                code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(MethodHandle.class),
+                        "invokeExact", "TODO - function type from ", false);
+            }
         }
     }
 
@@ -98,10 +109,23 @@ public class JvmCodeVisitor implements CodeVisitor {
     public void visitParametric(byte opcode) {
         switch (opcode){
             case DROP -> {
-                code.visitInsn(Opcodes.POP);
+                switch (operands.peek()){
+                    case I32, F32 -> code.visitInsn(Opcodes.POP);
+                    case I64, F64 -> code.visitInsn(Opcodes.POP2);
+                }
+                pop();
             }
             case SELECT -> {
-                // TODO
+                // test top of stack, if 1 get the first value, if 0 get the second
+
+                // last operand is always an i32, so the first two operands will determine
+                // the type of the select expression
+                pop();
+                pop();
+                var opType = pop();
+                var jvmType = JvmCompiler.toJvmType(opType);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                    "select", Type.getMethodDescriptor(jvmType, jvmType, jvmType, Type.INT_TYPE), false);
             }
         }
     }
@@ -124,7 +148,6 @@ public class JvmCodeVisitor implements CodeVisitor {
             case LOCAL_SET -> {
                 pop();
                 switch (type){
-                    // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ISTORE, id);
                     case F32 -> code.visitVarInsn(Opcodes.FSTORE, id);
                     case I64 -> code.visitVarInsn(Opcodes.LSTORE, id);
@@ -132,9 +155,11 @@ public class JvmCodeVisitor implements CodeVisitor {
                 }
             }
             case LOCAL_TEE -> {
-                code.visitInsn(Opcodes.DUP); // TODO - this is probably wrong with long/double
+                switch (operands.peek()){
+                    case I32, F32 -> code.visitInsn(Opcodes.DUP);
+                    case I64, F64 -> code.visitInsn(Opcodes.DUP2);
+                }
                 switch (type){
-                    // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ISTORE, id);
                     case F32 -> code.visitVarInsn(Opcodes.FSTORE, id);
                     case I64 -> code.visitVarInsn(Opcodes.LSTORE, id);
@@ -326,7 +351,15 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     protected void pushMemory(){
         code.visitVarInsn(Opcodes.ALOAD, 0);
-        code.visitFieldInsn(Opcodes.GETFIELD, moduleClassName, "memory0", Type.getDescriptor(Memory.class));
+        code.visitFieldInsn(Opcodes.GETFIELD, Type.getInternalName(WasmModule.class), "memory0", Type.getDescriptor(Memory.class));
+    }
+
+    protected void getFromTable(int id){
+        code.visitVarInsn(Opcodes.ALOAD, 0);
+        code.visitFieldInsn(Opcodes.GETFIELD, Type.getInternalName(WasmModule.class), "table0", Type.getDescriptor(Table.class));
+        code.visitLdcInsn(id);
+        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Table.class), "get",
+                Type.getMethodDescriptor(Type.getType(MethodHandle.class), Type.INT_TYPE), false);
     }
 
     protected void makeILoad(ValueType target, int storedWidth, int align, int offset, boolean signed){
