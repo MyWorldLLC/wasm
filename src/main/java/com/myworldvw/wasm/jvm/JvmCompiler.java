@@ -97,13 +97,13 @@ public class JvmCompiler {
         if(module.getImportSection() != null){
             Arrays.stream(module.getImportSection())
                     .filter(i -> i.descriptor().type() == ImportDescriptor.Type.TYPE_ID)
-                    .map(i -> makeFunctionInfo(module, new FunctionId(functions.size() + 1), true))
+                    .map(i -> makeFunctionInfo(module, new FunctionId(functions.size()), true))
                     .forEach(functions::add);
         }
 
         if(module.getFunctionSection() != null){
             Arrays.stream(module.getFunctionSection())
-                    .map(f -> makeFunctionInfo(module, new FunctionId(functions.size() + 1), false))
+                    .map(f -> makeFunctionInfo(module, new FunctionId(functions.size()), false))
                     .forEach(functions::add);
         }
 
