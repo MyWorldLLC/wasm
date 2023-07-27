@@ -6,6 +6,7 @@ import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.CodeVisitor;
 import com.myworldvw.wasm.binary.FunctionType;
 import com.myworldvw.wasm.binary.ValueType;
+import com.myworldvw.wasm.binary.WasmBinaryModule;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -21,7 +22,9 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     record BlockLabels(Label start, Label end){}
 
+    protected final WasmBinaryModule module;
     protected final String moduleClassName;
+    protected final FunctionInfo[] functionTable;
 
     protected final MethodVisitor code;
     protected FunctionType signature;
@@ -31,8 +34,10 @@ public class JvmCodeVisitor implements CodeVisitor {
     protected final Stack<ValueType> operands;
     protected ValueType[] locals;
 
-    public JvmCodeVisitor(String moduleClassName, MethodVisitor code){
+    public JvmCodeVisitor(WasmBinaryModule module, String moduleClassName, FunctionInfo[] functionTable, MethodVisitor code){
+        this.module = module;
         this.moduleClassName = moduleClassName;
+        this.functionTable = functionTable;
         this.code = code;
         blockTypes = new Stack<>();
         blockLabels = new Stack<>();
@@ -91,16 +96,15 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitCall(byte opcode, int target) {
+        var function = functionTable[target];
         switch (opcode) {
             case CALL -> {
-                // TODO - determine if this is a local or imported function. Locally declared functions
-                // will be accessed as direct method calls, imported functions will be stored and
-                // invoked via method handle.
+                // TODO - invoke target via the module's static invoker helper for that function
             }
             case CALL_INDIRECT -> {
                 getFromTable(target);
                 code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(MethodHandle.class),
-                        "invokeExact", "TODO - function type from ", false);
+                        "invokeExact", JvmCompiler.typeToDescriptor(function.type()), false);
             }
         }
     }
