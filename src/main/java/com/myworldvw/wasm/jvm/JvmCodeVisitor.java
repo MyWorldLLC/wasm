@@ -1,7 +1,6 @@
 package com.myworldvw.wasm.jvm;
 
 import com.myworldvw.wasm.Memory;
-import com.myworldvw.wasm.Table;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.CodeVisitor;
 import com.myworldvw.wasm.binary.FunctionType;
@@ -13,7 +12,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
-import java.util.Arrays;
 import java.util.Optional;
 import java.util.Stack;
 
@@ -107,7 +105,7 @@ public class JvmCodeVisitor implements CodeVisitor {
                         JvmCompiler.invokerHelperDescriptor(function.type(), moduleClassName), false);
             }
             case CALL_INDIRECT -> {
-                getFromTable(target);
+                JvmCompiler.getFromTable(code, target);
                 code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(MethodHandle.class),
                         "invokeExact", JvmCompiler.typeToDescriptor(function.type()), false);
             }
@@ -352,14 +350,6 @@ public class JvmCodeVisitor implements CodeVisitor {
     protected void pushMemory(){
         code.visitVarInsn(Opcodes.ALOAD, 0);
         code.visitFieldInsn(Opcodes.GETFIELD, Type.getInternalName(WasmModule.class), "memory0", Type.getDescriptor(Memory.class));
-    }
-
-    protected void getFromTable(int id){
-        code.visitVarInsn(Opcodes.ALOAD, 0);
-        code.visitFieldInsn(Opcodes.GETFIELD, Type.getInternalName(WasmModule.class), "table0", Type.getDescriptor(Table.class));
-        code.visitLdcInsn(id);
-        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Table.class), "get",
-                Type.getMethodDescriptor(Type.getType(MethodHandle.class), Type.INT_TYPE), false);
     }
 
     protected void makeILoad(ValueType target, int storedWidth, int align, int offset, boolean signed){

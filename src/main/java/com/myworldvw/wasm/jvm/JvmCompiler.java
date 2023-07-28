@@ -1,5 +1,6 @@
 package com.myworldvw.wasm.jvm;
 
+import com.myworldvw.wasm.Table;
 import com.myworldvw.wasm.WasmExport;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
@@ -12,7 +13,6 @@ import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.function.Predicate;
 
 public class JvmCompiler {
 
@@ -20,6 +20,14 @@ public class JvmCompiler {
 
     public JvmCompiler(JvmCompilerConfig config){
         this.config = config;
+    }
+
+    public static void getFromTable(MethodVisitor code, int id){
+        code.visitVarInsn(Opcodes.ALOAD, 0);
+        code.visitFieldInsn(Opcodes.GETFIELD, Type.getInternalName(WasmModule.class), "table0", Type.getDescriptor(Table.class));
+        code.visitLdcInsn(id);
+        code.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Table.class), "get",
+                Type.getMethodDescriptor(Type.getType(MethodHandle.class), Type.INT_TYPE), false);
     }
 
     public WasmClassLoader getLoader(){
@@ -45,9 +53,6 @@ public class JvmCompiler {
 
         // TODO - visit global, element, & data sections & perform applicable initialization.
 
-        // TODO - assign imported functions to the method handle fields created for them
-        // TODO - what about table entries?
-
         constructor.visitInsn(Opcodes.RETURN);
 
         constructor.visitEnd();
@@ -69,7 +74,7 @@ public class JvmCompiler {
         for(int i = 0; i < functions.length; i++){
 
             var function = functions[i];
-            var id = new FunctionId(i);
+            var id = new FunctionId(i, i < firstLocalFunctionId);
             var type = module.typeForFunction(id);
 
             // Make static invoker helper
@@ -146,29 +151,31 @@ public class JvmCompiler {
         if(module.getImportSection() != null){
             Arrays.stream(module.getImportSection())
                     .filter(i -> i.descriptor().type() == ImportDescriptor.Type.TYPE_ID)
-                    .forEach(f -> functions.add(makeFunctionInfo(module, new FunctionId(functions.size()), true)));
+                    .forEach(f -> functions.add(makeFunctionInfo(module, new FunctionId(functions.size(), true), Optional.of(f.descriptor().typeId()))));
         }
 
         if(module.getFunctionSection() != null){
             Arrays.stream(module.getFunctionSection())
                     .forEach(f ->
-                        functions.add(makeFunctionInfo(module, new FunctionId(functions.size()), false))
+                        functions.add(makeFunctionInfo(module, new FunctionId(functions.size(), false), Optional.empty()))
                     );
         }
 
         return functions.toArray(FunctionInfo[]::new);
     }
 
-    protected FunctionInfo makeFunctionInfo(WasmBinaryModule module, FunctionId id, boolean isImported){
+    protected FunctionInfo makeFunctionInfo(WasmBinaryModule module, FunctionId id, Optional<TypeId> importedType){
 
         var types = module.getTypeSection();
-        var functions = module.getFunctionSection();
 
         var export = module.getExportedName(id);
         var isExported = export.isPresent();
         var name = export.orElse("function$" + id.id());
 
-        return new FunctionInfo(module.getName(), name, types[functions[id.id()].id()], isImported, isExported);
+        var type = importedType.map(typeId -> types[typeId.id()])
+                .orElseGet(() -> module.typeForFunction(id));
+
+        return new FunctionInfo(module.getName(), name, type, importedType.isPresent(), isExported);
     }
 
     public static Type toJvmType(ValueType t){

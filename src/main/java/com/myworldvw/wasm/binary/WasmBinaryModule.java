@@ -128,7 +128,19 @@ public class WasmBinaryModule {
     }
 
     public FunctionType typeForFunction(FunctionId function){
-        return typeSection[functionSection[function.id()].id()];
+        var index = 0;
+        if(function.isLocal()){
+            index = functionSection[function.id() - importedFunctionCount()].id();
+        }else{
+            index = importSection[function.id()].descriptor().typeId().id();
+        }
+        return typeSection[index];
+    }
+
+    public int importedFunctionCount(){
+        return importSection == null ? 0 : (int) Arrays.stream(importSection)
+                .filter(i -> i.descriptor().type() == ImportDescriptor.Type.TYPE_ID)
+                .count();
     }
 
     public boolean isExported(FunctionId function){

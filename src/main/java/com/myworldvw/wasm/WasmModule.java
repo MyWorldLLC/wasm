@@ -1,17 +1,13 @@
 package com.myworldvw.wasm;
 
 import com.myworldvw.wasm.binary.Import;
-import com.myworldvw.wasm.binary.ImportDescriptor;
-
-import java.lang.invoke.MethodHandle;
-import java.util.Arrays;
-import java.util.Optional;
 
 public abstract class WasmModule {
 
     protected final String name;
-    protected final Memory memory0;
-    protected final Table table0;
+    protected volatile boolean locked;
+    protected volatile Memory memory0;
+    protected volatile Table table0;
     protected final Import[] imports;
 
     public WasmModule(String name, Import[] imports){
@@ -25,8 +21,22 @@ public abstract class WasmModule {
         return name;
     }
 
+    public void importMemory(Memory memory){
+        if(locked){
+            throw new IllegalStateException("Module %s has already been initialized".formatted(name));
+        }
+        memory0 = memory;
+    }
+
     public Memory getMemory(){
         return memory0;
+    }
+
+    public void importTable(Table table){
+        if(locked){
+            throw new IllegalStateException("Module %s has already been initialized".formatted(name));
+        }
+        table0 = table;
     }
 
     public Table getTable(){
@@ -37,15 +47,8 @@ public abstract class WasmModule {
         return imports;
     }
 
-    public Optional<MethodHandle> getImported(String module, String name){
-        var imp = Arrays.stream(imports)
-                .filter(i -> i.module().equals(module)
-                        && i.name().equals(name)
-                        && i.descriptor().type() == ImportDescriptor.Type.TYPE_ID)
-                .findFirst();
-
-        // TODO - verify that type id corresponds to imported id in table
-        return imp.map(i -> table0.get(i.descriptor().typeId().id()));
+    public void initializationComplete(){
+        locked = true;
     }
 
 }

@@ -26,4 +26,14 @@ public class FunctionCallTests {
 
         assertEquals(3, (int) handle.invokeExact());
     }
+
+    @Test
+    void callsImportedFunction() throws Throwable {
+        var ctx = WasmLoader.createFromResources("/wasm/callImportedFunction.wasm");
+        var module = ctx.instantiate("callImportedFunction");
+        module.getTable().set(0, MethodHandles.constant(int.class, 3));
+        var handle = ctx.getExportedFunction("callImportedFunction", "callMe").get();
+
+        assertEquals(3, (int) handle.invokeExact());
+    }
 }
