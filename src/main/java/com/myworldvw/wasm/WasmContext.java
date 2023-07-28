@@ -10,11 +10,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 public class WasmContext {
 
@@ -51,10 +49,44 @@ public class WasmContext {
         return instantiatedModules.stream().filter(m -> m.getName().equals(moduleName)).findFirst().get();
     }
 
-    public WasmModule instantiate(String name) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
-        var instance = compile(name).getConstructor(String.class, Import[].class).newInstance(name, findBinary(name).get().getImportSection());
+    public WasmModule instantiate(String name) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException, MissingImportException {
+        return instantiate(name, new Imports());
+    }
+
+    public WasmModule instantiate(String name, Imports imports) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException, MissingImportException {
+        var requiredImports = findBinary(name).get().getImportSection();
+        var instance = compile(name).getConstructor(String.class, Import[].class).newInstance(name, requiredImports);
+
+        if(requiredImports != null){
+            for(var required : requiredImports){
+                var field = fieldForImport(instance, required);
+                switch (required.descriptor().type()){
+                    case TYPE_ID -> field.set(instance, imports.getFunction(required.module(), required.name()));
+                    case MEMORY_TYPE -> field.set(imports, imports.getMemory(required.module(), required.name()));
+                    case TABLE_TYPE -> field.set(imports, imports.getTable(required.module(), required.name()));
+                    case GLOBAL_TYPE -> field.set(imports, null); // TODO
+                }
+            }
+        }
+
         instantiatedModules.add(instance);
         return instance;
+    }
+
+    protected Field fieldForImport(WasmModule instance, Import i){
+        return Arrays.stream(instance.getClass().getDeclaredFields())
+                .filter(f -> {
+                    var wi = f.getDeclaredAnnotation(WasmImport.class);
+                    return wi != null && wi.module().equals(i.module()) && wi.name().equals(i.name());
+                })
+                .filter(f -> switch (i.descriptor().type()){
+                    case TYPE_ID -> f.getType().equals(MethodHandle.class);
+                    case TABLE_TYPE -> f.getType().equals(Table.class);
+                    case MEMORY_TYPE -> f.getType().equals(Memory.class);
+                    case GLOBAL_TYPE -> false; // TODO
+                })
+                .findFirst()
+                .orElse(null);
     }
 
     public Optional<MethodHandle> getExportedFunction(String moduleName, String functionName){
@@ -89,7 +121,7 @@ public class WasmContext {
         }
     }
 
-    public void instantiateAll() throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+    public void instantiateAll() throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException, MissingImportException {
         for(var module : modules){
             instantiate(module.getName());
         }

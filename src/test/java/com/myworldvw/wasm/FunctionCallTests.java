@@ -3,6 +3,7 @@ package com.myworldvw.wasm;
 import com.myworldvw.wasm.util.WasmLoader;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,8 +31,8 @@ public class FunctionCallTests {
     @Test
     void callsImportedFunction() throws Throwable {
         var ctx = WasmLoader.createFromResources("/wasm/callImportedFunction.wasm");
-        var module = ctx.instantiate("callImportedFunction");
-        module.getTable().set(0, MethodHandles.constant(int.class, 3));
+        var module = ctx.instantiate("callImportedFunction", new Imports()
+                .function("env", "importMe", MethodHandles.constant(int.class, 3)));
         var handle = ctx.getExportedFunction("callImportedFunction", "callMe").get();
 
         assertEquals(3, (int) handle.invokeExact());

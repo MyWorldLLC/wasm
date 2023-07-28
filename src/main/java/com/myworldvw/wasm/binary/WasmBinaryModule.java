@@ -132,7 +132,7 @@ public class WasmBinaryModule {
         if(function.isLocal()){
             index = functionSection[function.id() - importedFunctionCount()].id();
         }else{
-            index = importSection[function.id()].descriptor().typeId().id();
+            index = getImport(function).get().descriptor().typeId().id();
         }
         return typeSection[index];
     }
@@ -159,5 +159,24 @@ public class WasmBinaryModule {
                     && e.descriptor().functionId().equals(function))
                 .map(Export::name)
                 .findFirst();
+    }
+
+    public Optional<Import> getImport(FunctionId function){
+        if(importSection == null){
+            return Optional.empty();
+        }
+
+        int importId = 0;
+        for(var i : importSection){
+            if(i.descriptor().type() != ImportDescriptor.Type.TYPE_ID){
+                continue;
+            }
+
+            if(importId == function.id()){
+                return Optional.of(i);
+            }
+            importId++;
+        }
+        return Optional.empty();
     }
 }

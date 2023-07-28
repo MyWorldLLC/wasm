@@ -2,6 +2,7 @@ package com.myworldvw.wasm.jvm;
 
 import com.myworldvw.wasm.Table;
 import com.myworldvw.wasm.WasmExport;
+import com.myworldvw.wasm.WasmImport;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
 import org.objectweb.asm.ClassWriter;
@@ -51,12 +52,21 @@ public class JvmCompiler {
         constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, Type.getInternalName(WasmModule.class), "<init>",
                 Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class), Type.getType(Import[].class)), false);
 
-        // TODO - visit global, element, & data sections & perform applicable initialization.
-
         constructor.visitInsn(Opcodes.RETURN);
 
         constructor.visitEnd();
         constructor.visitMaxs(0, 0);
+
+        var initializer = moduleWriter.visitMethod(Opcodes.ACC_PUBLIC, "initialize",
+                Type.getMethodDescriptor(Type.VOID_TYPE), null, null);
+        initializer.visitCode();
+
+        // TODO - visit global, element, & data sections & perform applicable initialization.
+
+        initializer.visitInsn(Opcodes.RETURN);
+
+        initializer.visitEnd();
+        initializer.visitMaxs(0, 0);
 
         // Visit functions. Exported functions will be public and annotated with @WasmExport,
         // non-exported functions should be private. Note that imported functions may also be exported.
@@ -98,9 +108,17 @@ public class JvmCompiler {
 
             // If imported, make a field for the MethodHandle
             if(function.imported()){
-                moduleWriter.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL,
-                                function.name(), Type.getDescriptor(MethodHandle.class), null, null)
-                        .visitEnd();
+                var importField = moduleWriter.visitField(Opcodes.ACC_PUBLIC,
+                                function.name(), Type.getDescriptor(MethodHandle.class), null, null);
+
+                var requiredImport = module.getImport(id).get();
+
+                var importVisitor = importField.visitAnnotation(Type.getDescriptor(WasmImport.class), true);
+                importVisitor.visit("module", requiredImport.module());
+                importVisitor.visit("name", requiredImport.name());
+                importVisitor.visitEnd();
+
+                importField.visitEnd();
             }
 
             // Visit the method locally implementing this function.
