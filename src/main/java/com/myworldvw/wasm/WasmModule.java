@@ -51,4 +51,6 @@ public abstract class WasmModule {
         locked = true;
     }
 
+    public abstract void initialize();
+
 }

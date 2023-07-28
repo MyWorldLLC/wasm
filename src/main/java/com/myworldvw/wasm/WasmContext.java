@@ -69,6 +69,9 @@ public class WasmContext {
             }
         }
 
+        instance.initialize();
+        instance.initializationComplete();
+
         instantiatedModules.add(instance);
         return instance;
     }
