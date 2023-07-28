@@ -4,11 +4,14 @@ import com.myworldvw.wasm.WasmExport;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 public class JvmCompiler {
@@ -42,6 +45,9 @@ public class JvmCompiler {
 
         // TODO - visit global, element, & data sections & perform applicable initialization.
 
+        // TODO - assign imported functions to the method handle fields created for them
+        // TODO - what about table entries?
+
         constructor.visitInsn(Opcodes.RETURN);
 
         constructor.visitEnd();
@@ -60,27 +66,70 @@ public class JvmCompiler {
                 .filter(FunctionInfo::imported)
                 .count();
 
-        // TODO - make fields for imported functions,
-        // and make call methods for them
+        for(int i = 0; i < functions.length; i++){
 
-        var types = module.getTypeSection();
-        var code = module.getCodeSection();
-        for(int i = 0; i < code.length; i++){
-            var id = new FunctionId(firstLocalFunctionId + i);
-            var function = functions[id.id()];
+            var function = functions[i];
+            var id = new FunctionId(i);
+            var type = module.typeForFunction(id);
 
-            var access = function.exported() ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PRIVATE;
+            // Make static invoker helper
+            // ============================= Invoker =============================
+            var invoker = moduleWriter.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC,
+                    "call$" + function.name(), invokerHelperDescriptor(function.type(), module.getName()), null, null);
 
-            var methodWriter = moduleWriter.visitMethod(access, function.name(), typeToDescriptor(types[i]), null, null);
+            invoker.visitVarInsn(Opcodes.ALOAD, function.type().params().length); // index of appended module ref
+
+            loadParams(invoker, function.type(), true);
+
+            invoker.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    module.getName(), function.name(),
+                    typeToDescriptor(function.type()), false);
+
+            makeReturn(invoker, function.type().returnType());
+
+            invoker.visitEnd();
+            invoker.visitMaxs(0, 0);
+            // ============================= End Invoker =============================
+
+            // If imported, make a field for the MethodHandle
+            if(function.imported()){
+                moduleWriter.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL,
+                                function.name(), Type.getDescriptor(MethodHandle.class), null, null)
+                        .visitEnd();
+            }
+
+            // Visit the method locally implementing this function.
+            // If imported, this will call the imported method handle,
+            // if local, this will contain the code for this function.
+            var methodWriter = moduleWriter.visitMethod(
+                    function.exported() ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PRIVATE,
+                    function.name(),
+                    typeToDescriptor(type), null, null);
+
             if(function.exported()){
                 var exportVisitor = methodWriter.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
-                    exportVisitor.visit("functionId", id.id());
-                    exportVisitor.visitEnd();
+                exportVisitor.visit("functionId", id.id());
+                exportVisitor.visitEnd();
             }
 
             methodWriter.visitCode();
-            var decoder = new WasmFunctionDecoder(code[i], types[i]);
-            decoder.decode(new JvmCodeVisitor(module, module.getName(), functions, methodWriter)); // TODO - support packaged/prefixed class name
+
+            if(function.imported()){
+                // If imported, get the MethodHandle and invoke it
+                methodWriter.visitVarInsn(Opcodes.ALOAD, 0);
+                methodWriter.visitFieldInsn(Opcodes.GETFIELD,
+                        module.getName(), function.name(), Type.getDescriptor(MethodHandle.class));
+
+                loadParams(methodWriter, type, false);
+                methodWriter.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(MethodHandle.class),
+                        "invokeExact", typeToDescriptor(type), false);
+                makeReturn(methodWriter, type.returnType());
+            }else{
+                // If local, compile the function body
+                var code = module.getCodeSection();
+                var decoder = new WasmFunctionDecoder(code[i - firstLocalFunctionId], module.typeForFunction(id));
+                decoder.decode(new JvmCodeVisitor(module, module.getName(), functions, methodWriter)); // TODO - support packaged/prefixed class name
+            }
 
             methodWriter.visitMaxs(0, 0);
             methodWriter.visitEnd();
@@ -97,14 +146,14 @@ public class JvmCompiler {
         if(module.getImportSection() != null){
             Arrays.stream(module.getImportSection())
                     .filter(i -> i.descriptor().type() == ImportDescriptor.Type.TYPE_ID)
-                    .map(i -> makeFunctionInfo(module, new FunctionId(functions.size()), true))
-                    .forEach(functions::add);
+                    .forEach(f -> functions.add(makeFunctionInfo(module, new FunctionId(functions.size()), true)));
         }
 
         if(module.getFunctionSection() != null){
             Arrays.stream(module.getFunctionSection())
-                    .map(f -> makeFunctionInfo(module, new FunctionId(functions.size()), false))
-                    .forEach(functions::add);
+                    .forEach(f ->
+                        functions.add(makeFunctionInfo(module, new FunctionId(functions.size()), false))
+                    );
         }
 
         return functions.toArray(FunctionInfo[]::new);
@@ -113,12 +162,13 @@ public class JvmCompiler {
     protected FunctionInfo makeFunctionInfo(WasmBinaryModule module, FunctionId id, boolean isImported){
 
         var types = module.getTypeSection();
+        var functions = module.getFunctionSection();
 
         var export = module.getExportedName(id);
         var isExported = export.isPresent();
         var name = export.orElse("function$" + id.id());
 
-        return new FunctionInfo(module.getName(), name, types[id.id()], isImported, isExported);
+        return new FunctionInfo(module.getName(), name, types[functions[id.id()].id()], isImported, isExported);
     }
 
     public static Type toJvmType(ValueType t){
@@ -130,11 +180,53 @@ public class JvmCompiler {
         };
     }
 
+    public static String classNameToDescriptor(String name){
+        return "L" + name.replace('.', '/') + ";";
+    }
+
+    public static Type[] toJvmTypes(ValueType[] v){
+        return Arrays.stream(v).map(JvmCompiler::toJvmType).toArray(Type[]::new);
+    }
+
     public static String typeToDescriptor(FunctionType type){
         return Type.getMethodDescriptor(
                 type.isVoid() ? Type.VOID_TYPE : toJvmType(type.results()[0]),
                 Arrays.stream(type.params()).map(JvmCompiler::toJvmType).toArray(Type[]::new)
         );
+    }
+
+    public static String invokerHelperDescriptor(FunctionType type, String moduleClassName){
+        var types = toJvmTypes(type.params());
+        var pTypes = Arrays.copyOf(types, types.length + 1);
+        pTypes[pTypes.length - 1] = Type.getType(JvmCompiler.classNameToDescriptor(moduleClassName));
+
+        var rType = type.isVoid() ? Type.VOID_TYPE : JvmCompiler.toJvmType(type.results()[0]);
+        return Type.getMethodDescriptor(rType, pTypes);
+    }
+
+    public static void loadParams(MethodVisitor code, FunctionType type, boolean isStatic){
+        var offset = isStatic ? 0 : 1;
+        for(int i = 0; i < type.params().length; i++){
+            var pType = type.params()[i];
+            switch (pType){
+                case I32 -> code.visitVarInsn(Opcodes.ILOAD, i + offset);
+                case I64 -> code.visitVarInsn(Opcodes.LLOAD, i + offset);
+                case F32 -> code.visitVarInsn(Opcodes.FLOAD, i + offset);
+                case F64 -> code.visitVarInsn(Opcodes.DLOAD, i + offset);
+            }
+        }
+    }
+
+    public static void makeReturn(MethodVisitor code, Optional<ValueType> rType){
+        rType.ifPresentOrElse(
+                t -> {
+                    switch (t) {
+                        case I32 -> code.visitInsn(Opcodes.IRETURN);
+                        case F32 -> code.visitInsn(Opcodes.FRETURN);
+                        case I64 -> code.visitInsn(Opcodes.LRETURN);
+                        case F64 -> code.visitInsn(Opcodes.DRETURN);
+                    }
+                }, () -> code.visitInsn(Opcodes.RETURN));
     }
 
 }

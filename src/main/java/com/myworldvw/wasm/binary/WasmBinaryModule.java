@@ -127,6 +127,10 @@ public class WasmBinaryModule {
         dataSection = section;
     }
 
+    public FunctionType typeForFunction(FunctionId function){
+        return typeSection[functionSection[function.id()].id()];
+    }
+
     public boolean isExported(FunctionId function){
         return exportSection != null && Arrays.stream(exportSection)
                 .anyMatch(e -> e.descriptor().type() == ExportDescriptor.Type.FUNCTION_ID

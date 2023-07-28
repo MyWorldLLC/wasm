@@ -13,6 +13,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Stack;
 
@@ -99,7 +100,11 @@ public class JvmCodeVisitor implements CodeVisitor {
         var function = functionTable[target];
         switch (opcode) {
             case CALL -> {
-                // TODO - invoke target via the module's static invoker helper for that function
+                // Invoke target via the module's static invoker helper for that function
+                code.visitVarInsn(Opcodes.ALOAD, 0);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, moduleClassName,
+                        "call$" + function.name(),
+                        JvmCompiler.invokerHelperDescriptor(function.type(), moduleClassName), false);
             }
             case CALL_INDIRECT -> {
                 getFromTable(target);
@@ -255,15 +260,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     }
 
     protected void makeReturn(){
-        signature.returnType().ifPresentOrElse(
-                t -> {
-                    switch (t) {
-                        case I32 -> code.visitInsn(Opcodes.IRETURN);
-                        case F32 -> code.visitInsn(Opcodes.FRETURN);
-                        case I64 -> code.visitInsn(Opcodes.LRETURN);
-                        case F64 -> code.visitInsn(Opcodes.DRETURN);
-                    }
-                }, () -> code.visitInsn(Opcodes.RETURN));
+        JvmCompiler.makeReturn(code, signature.returnType());
     }
 
     protected ValueType paramOrLocal(int id){
