@@ -147,7 +147,6 @@ public class JvmCodeVisitor implements CodeVisitor {
             case LOCAL_GET -> {
                 push(type);
                 switch (type){
-                    // TODO - this doesn't account for longs/doubles taking up 2 local slots
                     case I32 -> code.visitVarInsn(Opcodes.ILOAD, id);
                     case F32 -> code.visitVarInsn(Opcodes.FLOAD, id);
                     case I64 -> code.visitVarInsn(Opcodes.LLOAD, id);

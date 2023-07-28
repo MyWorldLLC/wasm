@@ -39,7 +39,7 @@ public class Table {
 
         if(maxSize.map(m -> id < m).orElse(true)){
             if(entries == null){
-                entries = new MethodHandle[id];
+                entries = new MethodHandle[Math.max(1, id)];
             }else{
                 entries = Arrays.copyOf(entries, id);
             }
