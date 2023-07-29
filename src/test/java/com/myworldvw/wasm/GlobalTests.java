@@ -2,7 +2,6 @@ package com.myworldvw.wasm;
 
 import com.myworldvw.wasm.globals.I32Global;
 import com.myworldvw.wasm.util.WasmLoader;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,6 +21,20 @@ public class GlobalTests {
         assertTrue(global.isPresent());
         assertTrue(global.get() instanceof I32Global);
         assertEquals(3, ((I32Global) global.get()).getValue());
+    }
+
+    @Test
+    void correctlyInitializesGlobals() throws Throwable {
+        var ctx = WasmLoader.createFromResources("/wasm/globalInitializers.wasm");
+        ctx.instantiate("globalInitializers", new Imports()
+                .global("env", "importMe", I32Global.immutable(2)));
+        var global1 = ctx.getExportedGlobal("globalInitializers", "importMe");
+        var global2 = ctx.getExportedGlobal("globalInitializers", "exportMe");
+
+        assertTrue(global1.isPresent());
+        assertTrue(global2.isPresent());
+        assertEquals(2, ((I32Global) global1.get()).getValue());
+        assertEquals(2, ((I32Global) global2.get()).getValue());
     }
 
 }
