@@ -53,11 +53,11 @@ public class JvmCodeVisitor implements CodeVisitor {
         return operands.pop();
     }
 
-    protected Label getLabel(int index){
+    protected BlockInfo getJumpTarget(int index){
         int current = 0;
         for(var block : blockLabels){
             if(current == index){
-                return block.label();
+                return block;
             }
             current++;
         }
@@ -95,6 +95,7 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitBlock(byte opcode, Optional<ValueType> blockType) {
+        // TODO - check if operand stack needs to be popped as part of any jump
 
         if(opcode == ELSE){
             // If bytecode is well-formed, this will never NPE.
@@ -129,12 +130,12 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitBranch(byte opcode, int labelId) {
-        var target = getLabel(labelId);
+        var target = getJumpTarget(labelId);
         switch (opcode){
-            case BR -> code.visitJumpInsn(Opcodes.GOTO, target);
+            case BR -> code.visitJumpInsn(Opcodes.GOTO, target.label());
             case BR_IF -> {
                 code.visitLdcInsn(0);
-                code.visitJumpInsn(Opcodes.IFNE, target);
+                code.visitJumpInsn(Opcodes.IFNE, target.label());
                 pop();
             }
         }
@@ -145,9 +146,10 @@ public class JvmCodeVisitor implements CodeVisitor {
         // This is only triggered by a BR_TABLE, so no need to test the opcode
         // There is a single integer operand indexing into the label ids.
         var labels = Arrays.stream(labelIds)
-                        .mapToObj(this::getLabel)
+                        .mapToObj(this::getJumpTarget)
+                        .map(BlockInfo::label)
                         .toArray(Label[]::new);
-        code.visitTableSwitchInsn(0, labelIds.length - 1, getLabel(defaultTarget), labels);
+        code.visitTableSwitchInsn(0, labelIds.length - 1, getJumpTarget(defaultTarget).label(), labels);
         pop();
     }
 
@@ -326,6 +328,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     @Override
     public void visitNumeric(byte opcode) {
         switch (opcode){
+            // I32 Tests & Comparisons
             case I32_EQZ -> {
                 code.visitLdcInsn(0);
                 push(ValueType.I32);
@@ -333,7 +336,206 @@ public class JvmCodeVisitor implements CodeVisitor {
             }
             case I32_EQ -> testIntEquality(ValueType.I32);
             case I32_NE -> testIntInequality(ValueType.I32);
-            case I32_ADD -> addInts(ValueType.I32);
+            case I32_LT_S -> {
+                compare(ValueType.I32, true);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case I32_LT_U -> {
+                compare(ValueType.I32, false);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case I32_GT_S -> {
+                compare(ValueType.I32, true);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case I32_GT_U -> {
+                compare(ValueType.I32, false);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case I32_LE_S -> {
+                compare(ValueType.I32, true);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case I32_LE_U -> {
+                compare(ValueType.I32, false);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case I32_GE_S -> {
+                compare(ValueType.I32, true);
+                comparisonHelper(Opcodes.IFGE);
+            }
+            case I32_GE_U -> {
+                compare(ValueType.I32, false);
+                comparisonHelper(Opcodes.IFGE);
+            }
+
+            // I64 Tests & Comparisons
+            case I64_EQZ -> {
+                code.visitLdcInsn(0);
+                push(ValueType.I64);
+                testIntEquality(ValueType.I64);
+            }
+            case I64_EQ -> testIntEquality(ValueType.I64);
+            case I64_NE -> testIntInequality(ValueType.I64);
+            case I64_LT_S -> {
+                compare(ValueType.I64, true);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case I64_LT_U -> {
+                compare(ValueType.I64, false);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case I64_GT_S -> {
+                compare(ValueType.I64, true);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case I64_GT_U -> {
+                compare(ValueType.I64, false);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case I64_LE_S -> {
+                compare(ValueType.I64, true);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case I64_LE_U -> {
+                compare(ValueType.I64, false);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case I64_GE_S -> {
+                compare(ValueType.I64, true);
+                comparisonHelper(Opcodes.IFGE);
+            }
+            case I64_GE_U -> {
+                compare(ValueType.I64, false);
+                comparisonHelper(Opcodes.IFGE);
+            }
+
+            // F32 Tests & Comparisons
+            case F32_EQ -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFEQ);
+            }
+            case F32_NE -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFNE);
+            }
+            case F32_LT -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case F32_GT -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case F32_LE -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case F32_GE -> {
+                compare(ValueType.F32, false);
+                comparisonHelper(Opcodes.IFGE);
+            }
+
+            // F64 Tests & Comparisons
+            case F64_EQ -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFEQ);
+            }
+            case F64_NE -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFNE);
+            }
+            case F64_LT -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFLT);
+            }
+            case F64_GT -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFGT);
+            }
+            case F64_LE -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFLE);
+            }
+            case F64_GE -> {
+                compare(ValueType.F64, false);
+                comparisonHelper(Opcodes.IFGE);
+            }
+
+            // I32 Math
+            case I32_CLZ -> clz(ValueType.I32);
+            case I32_CTZ -> ctz(ValueType.I32);
+            case I32_POPCNT -> popcnt(ValueType.I32);
+            case I32_ADD -> add(ValueType.I32);
+            case I32_SUB -> sub(ValueType.I32);
+            case I32_MUL -> mul(ValueType.I32);
+            case I32_DIV_S -> iDiv(ValueType.I32, true);
+            case I32_DIV_U -> iDiv(ValueType.I32, false);
+            case I32_REM_S -> iRem(ValueType.I32, true);
+            case I32_REM_U -> iRem(ValueType.I32, false);
+            case I32_AND -> iAnd(ValueType.I32);
+            case I32_OR -> iOr(ValueType.I32);
+            case I32_XOR -> iXor(ValueType.I32);
+            case I32_SHL -> shl(ValueType.I32);
+            case I32_SHR_S -> iShr(ValueType.I32, true);
+            case I32_SHR_U -> iShr(ValueType.I32, false);
+            case I32_ROTL -> iRotl(ValueType.I32);
+            case I32_ROTR -> iRotr(ValueType.I32);
+
+            // I64 Math
+            case I64_CLZ -> clz(ValueType.I64);
+            case I64_CTZ -> ctz(ValueType.I64);
+            case I64_POPCNT -> popcnt(ValueType.I64);
+            case I64_ADD -> add(ValueType.I64);
+            case I64_SUB -> sub(ValueType.I64);
+            case I64_MUL -> mul(ValueType.I64);
+            case I64_DIV_S -> iDiv(ValueType.I64, true);
+            case I64_DIV_U -> iDiv(ValueType.I64, false);
+            case I64_REM_S -> iRem(ValueType.I64, true);
+            case I64_REM_U -> iRem(ValueType.I64, false);
+            case I64_AND -> iAnd(ValueType.I64);
+            case I64_OR -> iOr(ValueType.I64);
+            case I64_XOR -> iXor(ValueType.I64);
+            case I64_SHL -> shl(ValueType.I64);
+            case I64_SHR_S -> iShr(ValueType.I64, true);
+            case I64_SHR_U -> iShr(ValueType.I64, false);
+            case I64_ROTL -> iRotl(ValueType.I64);
+            case I64_ROTR -> iRotr(ValueType.I64);
+
+            // F32 Math
+            case F32_ABS -> fAbs(ValueType.F32);
+            case F32_NEG -> fNeg(ValueType.F32);
+            case F32_CEIL -> fCeil(ValueType.F32);
+            case F32_FLOOR -> fFloor(ValueType.F32);
+            case F32_TRUNC -> fTrunc(ValueType.F32);
+            case F32_NEAREST -> fNearest(ValueType.F32);
+            case F32_SQRT -> fSqrt(ValueType.F32);
+            case F32_ADD -> add(ValueType.F32);
+            case F32_SUB -> sub(ValueType.F32);
+            case F32_MUL -> mul(ValueType.F32);
+            case F32_DIV -> fDiv(ValueType.F32);
+            case F32_MIN -> fMin(ValueType.F32);
+            case F32_MAX -> fMax(ValueType.F32);
+            case F32_COPYSIGN -> fCopysign(ValueType.F32);
+
+            // F64 Math
+            case F64_ABS -> fAbs(ValueType.F64);
+            case F64_NEG -> fNeg(ValueType.F64);
+            case F64_CEIL -> fCeil(ValueType.F64);
+            case F64_FLOOR -> fFloor(ValueType.F64);
+            case F64_TRUNC -> fTrunc(ValueType.F64);
+            case F64_NEAREST -> fNearest(ValueType.F64);
+            case F64_SQRT -> fSqrt(ValueType.F64);
+            case F64_ADD -> add(ValueType.F64);
+            case F64_SUB -> sub(ValueType.F64);
+            case F64_MUL -> mul(ValueType.F64);
+            case F64_DIV -> fDiv(ValueType.F64);
+            case F64_MIN -> fMin(ValueType.F64);
+            case F64_MAX -> fMax(ValueType.F64);
+            case F64_COPYSIGN -> fCopysign(ValueType.F64);
+
+            // Numeric Conversions
+            // TODO
         }
     }
 
@@ -384,40 +586,238 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     }
 
-    protected void compareInt(ValueType t, boolean signed){
+    protected void compare(ValueType t, boolean signed){
 
         var method = signed ? "compare" : "compareUnsigned";
 
-        if(t == ValueType.I32){
-            code.visitMethodInsn(
+        switch (t){
+            case I32 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
                     Type.getDescriptor(Integer.class),
                     method,
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
-        }else if(t == ValueType.I64){
-            code.visitMethodInsn(
+
+            case I64 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
                     Type.getDescriptor(Long.class),
                     method,
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.LONG_TYPE, Type.LONG_TYPE), false);
-            code.visitInsn(Opcodes.I2L);
+
+            case F32 -> code.visitMethodInsn(
+                    Opcodes.INVOKESTATIC,
+                    Type.getDescriptor(Float.class),
+                    "compare",
+                    Type.getMethodDescriptor(Type.INT_TYPE, Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
+
+            case F64 -> code.visitMethodInsn(
+                    Opcodes.INVOKESTATIC,
+                    Type.getDescriptor(Double.class),
+                    "compare",
+                    Type.getMethodDescriptor(Type.INT_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
         }
 
         pop();
         pop();
-        push(t);
+        push(ValueType.I32);
 
     }
 
-    protected void addInts(ValueType t){
+    protected void comparisonHelper(int opcode){
+        var trueBranch = new Label();
+        var end = new Label();
+        code.visitJumpInsn(opcode, trueBranch);
+        code.visitLdcInsn(0);
+        code.visitJumpInsn(Opcodes.GOTO, end);
+        code.visitLabel(trueBranch);
+        code.visitLdcInsn(1);
+        code.visitLabel(end);
+
+    }
+
+    protected void clz(ValueType t){
+        switch (t){
+            case I32 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                        "numberOfLeadingZeros",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+            }
+            case I64 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                        "numberOfLeadingZeros",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.LONG_TYPE), false);
+                pop();
+                push(ValueType.I32);
+            }
+        }
+    }
+
+    protected void ctz(ValueType t){
+        switch (t){
+            case I32 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                        "numberOfTrailingZeros",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+            }
+            case I64 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                        "numberOfTrailingZeros",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.LONG_TYPE), false);
+                pop();
+                push(ValueType.I32);
+            }
+        }
+    }
+
+    protected void popcnt(ValueType t){
+        switch (t){
+            case I32 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                        "bitCount",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+            }
+            case I64 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                        "bitCount",
+                        Type.getMethodDescriptor(Type.INT_TYPE, Type.LONG_TYPE), false);
+                pop();
+                push(ValueType.I32);
+            }
+        }
+    }
+
+    protected void add(ValueType t){
         switch (t){
             case I32 -> code.visitInsn(Opcodes.IADD);
             case I64 -> code.visitInsn(Opcodes.LADD);
+            case F32 -> code.visitInsn(Opcodes.FADD);
+            case F64 -> code.visitInsn(Opcodes.DADD);
         }
 
         pop();
         pop();
         push(t);
+    }
+
+    protected void sub(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.ISUB);
+            case I64 -> code.visitInsn(Opcodes.LSUB);
+            case F32 -> code.visitInsn(Opcodes.FSUB);
+            case F64 -> code.visitInsn(Opcodes.DSUB);
+        }
+
+        pop();
+        pop();
+        push(t);
+    }
+
+    protected void mul(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.IMUL);
+            case I64 -> code.visitInsn(Opcodes.LMUL);
+            case F32 -> code.visitInsn(Opcodes.FMUL);
+            case F64 -> code.visitInsn(Opcodes.DMUL);
+        }
+
+        pop();
+        pop();
+        push(t);
+    }
+
+    protected void iDiv(ValueType t, boolean signed){
+
+    }
+
+    protected void iRem(ValueType t, boolean signed){
+
+    }
+
+    protected void iAnd(ValueType t){
+
+    }
+
+    protected void iOr(ValueType t){
+
+    }
+
+    protected void iXor(ValueType t){
+
+    }
+
+    protected void shl(ValueType t){
+
+    }
+
+    protected void iShr(ValueType t, boolean signed){
+
+    }
+
+    protected void iRotl(ValueType t){
+
+    }
+
+    protected void iRotr(ValueType t){
+
+    }
+
+    protected void fAbs(ValueType t){
+
+    }
+
+    protected void fNeg(ValueType t){
+
+    }
+
+    protected void fCeil(ValueType t){
+
+    }
+
+    protected void fFloor(ValueType t){
+
+    }
+
+    protected void fTrunc(ValueType t){
+
+    }
+
+    protected void fNearest(ValueType t){
+
+    }
+
+    protected void fSqrt(ValueType t){
+
+    }
+
+    protected void fDiv(ValueType t){
+
+    }
+
+    protected void fMin(ValueType t){
+
+    }
+
+    protected void fMax(ValueType t){
+
+    }
+
+    protected void fCopysign(ValueType t){
+
+    }
+
+    protected void trunc(ValueType i, ValueType f, boolean signed){
+
+    }
+
+    protected void iExtend(boolean signed){
+
+    }
+
+    protected void fConvert(ValueType f, ValueType i, boolean signed){
+
+    }
+
+    protected void reinterpret(ValueType r, ValueType o){
+
     }
 
     protected void pushMemory(){
