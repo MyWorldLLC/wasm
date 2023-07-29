@@ -536,7 +536,9 @@ public class JvmCodeVisitor implements CodeVisitor {
 
             // Numeric Conversions
             case I32_WRAP_I64 -> {
-
+                code.visitInsn(Opcodes.L2I);
+                pop();
+                push(ValueType.I32);
             }
             case I32_TRUNC_F32_S -> trunc(ValueType.I32, ValueType.F32, true);
             case I32_TRUNC_F32_U -> trunc(ValueType.I32, ValueType.F32, false);
@@ -553,14 +555,18 @@ public class JvmCodeVisitor implements CodeVisitor {
             case F32_CONVERT_I64_S -> fConvert(ValueType.F32, ValueType.I64, true);
             case F32_CONVERT_I64_U -> fConvert(ValueType.F32, ValueType.I64, false);
             case F32_DEMOTE_F64 -> {
-
+                code.visitInsn(Opcodes.D2F);
+                pop();
+                push(ValueType.F32);
             }
             case F64_CONVERT_I32_S -> fConvert(ValueType.F64, ValueType.I32, true);
             case F64_CONVERT_I32_U -> fConvert(ValueType.F64, ValueType.I32, false);
             case F64_CONVERT_I64_S -> fConvert(ValueType.F64, ValueType.I64, true);
             case F64_CONVERT_I64_U -> fConvert(ValueType.F64, ValueType.I64, false);
             case F64_PROMOTE_F32 -> {
-
+                code.visitInsn(Opcodes.F2D);
+                pop();
+                push(ValueType.F64);
             }
             case I32_REINTERPRET_F32 -> reinterpret(ValueType.I32, ValueType.F32);
             case I64_REINTERPRET_F64 -> reinterpret(ValueType.I64, ValueType.F64);
