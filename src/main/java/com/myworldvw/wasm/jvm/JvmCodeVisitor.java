@@ -3,25 +3,20 @@ package com.myworldvw.wasm.jvm;
 import com.myworldvw.wasm.Memory;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
-import com.myworldvw.wasm.globals.F32Global;
-import com.myworldvw.wasm.globals.F64Global;
-import com.myworldvw.wasm.globals.I32Global;
-import com.myworldvw.wasm.globals.I64Global;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
-import java.util.List;
-import java.util.Optional;
-import java.util.Stack;
+import java.util.*;
 
 import static com.myworldvw.wasm.binary.WasmOpcodes.*;
 
 public class JvmCodeVisitor implements CodeVisitor {
 
-    record BlockLabels(Label start, Label end){}
+    enum BlockType {BLOCK, LOOP, IF}
+    record BlockInfo(BlockType type, int stackDepth, Label label, Label elseTarget){}
 
     protected final WasmBinaryModule module;
     protected final String moduleClassName;
@@ -30,10 +25,9 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     protected final MethodVisitor code;
     protected FunctionType signature;
-    protected final Stack<Optional<ValueType>> blockTypes;
-    protected final Stack<BlockLabels> blockLabels;
-    // TODO - need to track operands across block frames
-    protected final Stack<ValueType> operands;
+    protected final Deque<Optional<ValueType>> blockTypes;
+    protected final Deque<BlockInfo> blockLabels;
+    protected final Deque<ValueType> operands;
     protected ValueType[] locals;
 
     public JvmCodeVisitor(WasmBinaryModule module, String moduleClassName, FunctionInfo[] functionTable, List<GlobalInfo> globalTable, MethodVisitor code){
@@ -42,13 +36,32 @@ public class JvmCodeVisitor implements CodeVisitor {
         this.functionTable = functionTable;
         this.globalTable = globalTable;
         this.code = code;
-        blockTypes = new Stack<>();
-        blockLabels = new Stack<>();
-        operands = new Stack<>();
+        blockTypes = new ArrayDeque<>();
+        blockLabels = new ArrayDeque<>();
+        operands = new ArrayDeque<>();
     }
 
     public Optional<ValueType> peek(){
-        return operands.empty() ? Optional.empty() : Optional.of(operands.peek());
+        return operands.isEmpty() ? Optional.empty() : Optional.of(operands.peek());
+    }
+
+    protected void push(ValueType t){
+        operands.push(t);
+    }
+
+    protected ValueType pop(){
+        return operands.pop();
+    }
+
+    protected Label getLabel(int index){
+        int current = 0;
+        for(var block : blockLabels){
+            if(current == index){
+                return block.label();
+            }
+            current++;
+        }
+        return null; // If wasm is well-formed, this will never happen
     }
 
     @Override
@@ -59,9 +72,14 @@ public class JvmCodeVisitor implements CodeVisitor {
     @Override
     public void exitBlock() {
         // Exiting an internal block
-        var labels = blockLabels.pop();
-        code.visitLabel(labels.end());
-        // TODO - pop operands
+        var block = blockLabels.pop();
+        if(block.type() == BlockType.BLOCK){
+            code.visitLabel(block.label());
+        }
+        while (operands.size() > block.stackDepth()){
+            operands.pop();
+            pop();
+        }
     }
 
     @Override
@@ -77,20 +95,58 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitBlock(byte opcode, Optional<ValueType> blockType) {
+
+        if(opcode == ELSE){
+            // If bytecode is well-formed, this will never NPE.
+            code.visitLabel(blockLabels.peek().elseTarget());
+            return;
+        }
+
         blockTypes.push(blockType);
-        var start = new Label();
-        code.visitLabel(start);
-        blockLabels.push(new BlockLabels(start, new Label()));
+
+        var label = new Label();
+        var elseTarget = new Label();
+
+        if(opcode == LOOP){
+            code.visitLabel(label);
+        }
+
+        var infoType = switch (opcode){
+            case BLOCK -> BlockType.BLOCK;
+            case LOOP -> BlockType.LOOP;
+            case IF -> BlockType.IF;
+            default -> BlockType.BLOCK;
+        };
+
+        blockLabels.push(new BlockInfo(infoType, operands.size(), label, elseTarget));
+
+        if(opcode == IF){
+            code.visitLdcInsn(0);
+            code.visitJumpInsn(Opcodes.IFEQ, elseTarget);
+        }
     }
 
     @Override
     public void visitBranch(byte opcode, int labelId) {
-
+        var target = getLabel(labelId);
+        switch (opcode){
+            case BR -> code.visitJumpInsn(Opcodes.GOTO, target);
+            case BR_IF -> {
+                code.visitLdcInsn(0);
+                code.visitJumpInsn(Opcodes.IFNE, target);
+                pop();
+            }
+        }
     }
 
     @Override
     public void visitTableBranch(byte opcode, int[] labelIds, int defaultTarget) {
-
+        // This is only triggered by a BR_TABLE, so no need to test the opcode
+        // There is a single integer operand indexing into the label ids.
+        var labels = Arrays.stream(labelIds)
+                        .mapToObj(this::getLabel)
+                        .toArray(Label[]::new);
+        code.visitTableSwitchInsn(0, labelIds.length - 1, getLabel(defaultTarget), labels);
     }
 
     @Override
@@ -288,14 +344,6 @@ public class JvmCodeVisitor implements CodeVisitor {
             return signature.params()[id];
         }
         return locals[id];
-    }
-
-    protected void push(ValueType t){
-        operands.push(t);
-    }
-
-    protected ValueType pop(){
-        return operands.pop();
     }
 
     protected void testIntEquality(ValueType t){

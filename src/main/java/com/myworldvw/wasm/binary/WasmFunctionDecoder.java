@@ -56,7 +56,6 @@ public class WasmFunctionDecoder {
                     visitor.visitBlock(opcode, blockType);
                 }
                 case ELSE -> {
-                    visitor.exitBlock();
                     visitor.visitBlock(opcode, blockTypes.peek());
                 }
                 case BR, BR_IF -> {
