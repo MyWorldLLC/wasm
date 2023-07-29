@@ -761,99 +761,402 @@ public class JvmCodeVisitor implements CodeVisitor {
     }
 
     protected void iDiv(ValueType t, boolean signed){
+        switch(t){
+            case I32 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.IDIV);
+                }else{
+                    code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                            "divideUnsigned", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+                }
+            }
+            case I64 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.LDIV);
+                }else{
+                    code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                            "divideUnsigned", Type.getMethodDescriptor(Type.LONG_TYPE, Type.LONG_TYPE), false);
+                }
+            }
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iRem(ValueType t, boolean signed){
+        switch(t){
+            case I32 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.IREM);
+                }else{
+                    code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                            "remainderUnsigned", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE), false);
+                }
+            }
+            case I64 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.LREM);
+                }else{
+                    code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                            "remainderUnsigned", Type.getMethodDescriptor(Type.LONG_TYPE, Type.LONG_TYPE), false);
+                }
+            }
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iAnd(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.IAND);
+            case I64 -> code.visitInsn(Opcodes.LAND);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iOr(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.IOR);
+            case I64 -> code.visitInsn(Opcodes.LOR);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iXor(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.IXOR);
+            case I64 -> code.visitInsn(Opcodes.LXOR);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void shl(ValueType t){
+        switch (t){
+            case I32 -> code.visitInsn(Opcodes.ISHL);
+            case I64 -> code.visitInsn(Opcodes.LSHL);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iShr(ValueType t, boolean signed){
+        switch(t){
+            case I32 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.ISHR);
+                }else{
+                    code.visitInsn(Opcodes.IUSHR);
+                }
+            }
+            case I64 -> {
+                if(signed){
+                    code.visitInsn(Opcodes.LSHR);
+                }else{
+                    code.visitInsn(Opcodes.LUSHR);
+                }
+            }
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iRotl(ValueType t){
+        switch (t){
+            case I32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                    "rotateLeft", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
+            case I64 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                    "rotateLeft", Type.getMethodDescriptor(Type.LONG_TYPE, Type.LONG_TYPE, Type.INT_TYPE), false);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void iRotr(ValueType t){
+        switch (t){
+            case I32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                    "rotateRight", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
+            case I64 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Long.class),
+                    "rotateRight", Type.getMethodDescriptor(Type.LONG_TYPE, Type.LONG_TYPE, Type.INT_TYPE), false);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void fAbs(ValueType t){
-
+        switch (t){
+            case F32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "abs", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
+            case F64 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                        "abs", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+            }
+        }
     }
 
     protected void fNeg(ValueType t){
-
+        switch (t){
+            case F32 -> code.visitInsn(Opcodes.FNEG);
+            case F64 -> code.visitInsn(Opcodes.DNEG);
+        }
     }
 
     protected void fCeil(ValueType t){
-
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.F2D);
+        }
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                "ceil", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.D2F);
+        }
     }
 
     protected void fFloor(ValueType t){
-
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.F2D);
+        }
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                "floor", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.D2F);
+        }
     }
 
     protected void fTrunc(ValueType t){
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.F2D);
+        }
 
+        var negLabel = new Label();
+        var endLabel = new Label();
+        code.visitLdcInsn(0.0f);
+        code.visitJumpInsn(Opcodes.IFLT, negLabel);
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                "floor", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        code.visitJumpInsn(Opcodes.GOTO, endLabel);
+        code.visitLabel(negLabel);
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                "ceil", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        code.visitLabel(endLabel);
+
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.D2F);
+        }
     }
 
     protected void fNearest(ValueType t){
-
+        switch (t){
+            case F32 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                        "round", Type.getMethodDescriptor(Type.INT_TYPE, Type.FLOAT_TYPE), false);
+                code.visitInsn(Opcodes.I2F);
+            }
+            case F64 -> {
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                        "round", Type.getMethodDescriptor(Type.LONG_TYPE, Type.DOUBLE_TYPE), false);
+                code.visitInsn(Opcodes.L2D);
+            }
+        }
     }
 
     protected void fSqrt(ValueType t){
-
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.F2D);
+        }
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                "sqrt", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        if(t == ValueType.F32){
+            code.visitInsn(Opcodes.D2F);
+        }
     }
 
     protected void fDiv(ValueType t){
+        switch (t){
+            case F32 -> code.visitInsn(Opcodes.FDIV);
+            case F64 -> code.visitInsn(Opcodes.DDIV);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void fMin(ValueType t){
-
+        switch (t){
+            case F32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "min", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
+            case F64 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "min", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        }
     }
 
     protected void fMax(ValueType t){
+        switch (t){
+            case F32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "max", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
+            case F64 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "max", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void fCopysign(ValueType t){
+        switch (t){
+            case F32 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "copySign", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
+            case F64 -> code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Math.class),
+                    "copySign", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
+        }
 
+        pop();
+        pop();
+        push(t);
     }
 
     protected void trunc(ValueType i, ValueType f, boolean signed){
+        // Note: this operator accounts for signed vs unsigned representations
+        // of the result, but should the result fall outside of the range
+        // able to be represented by the result type, behavior is undefined.
 
+        var fFlag = f == ValueType.F32 ? 0b0000 : 0b0010;
+        var iFlag = i == ValueType.I32 ? 0b0000 : 0b0001;
+
+        var flag = fFlag | iFlag;
+        var sign = signed ? 1 : 0;
+
+        switch (flag){
+            case 0b0000 -> {
+                // F32 -> I32
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "truncateF32ToI32", Type.getMethodDescriptor(Type.INT_TYPE, Type.FLOAT_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0001 -> {
+                // F32 -> I64
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "truncateF32ToI64", Type.getMethodDescriptor(Type.LONG_TYPE, Type.FLOAT_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0010 -> {
+                // F64 -> I32
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "truncateF64ToI32", Type.getMethodDescriptor(Type.INT_TYPE, Type.DOUBLE_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0011 -> {
+                // F64 -> I64
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "truncateF64ToI64", Type.getMethodDescriptor(Type.LONG_TYPE, Type.DOUBLE_TYPE, Type.INT_TYPE), false);
+            }
+        }
+
+        pop();
+        push(i);
     }
 
     protected void iExtend(boolean signed){
-
+        // Extend I32 -> I64
+        if(signed){
+            code.visitInsn(Opcodes.I2L);
+        }else{
+            code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Integer.class),
+                    "toUnsignedLong", Type.getMethodDescriptor(Type.LONG_TYPE, Type.INT_TYPE), false);
+        }
+        pop();
+        push(ValueType.I64);
     }
 
     protected void fConvert(ValueType f, ValueType i, boolean signed){
 
+        var fFlag = f == ValueType.F32 ? 0b0000 : 0b0010;
+        var iFlag = i == ValueType.I32 ? 0b0000 : 0b0001;
+
+        var flag = fFlag | iFlag;
+        var sign = signed ? 1 : 0;
+
+        switch (flag){
+            case 0b0000 -> {
+                // I32 -> F32
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "convertI32ToF32", Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0001 -> {
+                // I32 -> F64
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "convertI32ToF64", Type.getMethodDescriptor(Type.LONG_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0010 -> {
+                // I64 -> F32
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "convertI64ToF32", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.LONG_TYPE, Type.INT_TYPE), false);
+            }
+            case 0b0011 -> {
+                // I64 -> F64
+                code.visitLdcInsn(sign);
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Runtime.class),
+                        "convertI64ToF64", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.LONG_TYPE, Type.INT_TYPE), false);
+            }
+        }
+
+        pop();
+        push(i);
     }
 
     protected void reinterpret(ValueType r, ValueType o){
 
+        switch (r){
+            case I32 -> {
+                // Operand is F32
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Float.class),
+                        "floatToRawIntBits", Type.getMethodDescriptor(Type.INT_TYPE, Type.FLOAT_TYPE), false);
+            }
+            case I64 -> {
+                // Operand is F64
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Double.class),
+                        "doubleToRawLongBits", Type.getMethodDescriptor(Type.LONG_TYPE, Type.DOUBLE_TYPE), false);
+            }
+            case F32 -> {
+                // Operand is I32
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Float.class),
+                        "intBitsToFloat", Type.getMethodDescriptor(Type.FLOAT_TYPE, Type.INT_TYPE), false);
+            }
+            case F64 -> {
+                // Operand is I64
+                code.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(Double.class),
+                        "longBitsToDouble", Type.getMethodDescriptor(Type.DOUBLE_TYPE, Type.LONG_TYPE), false);
+            }
+        }
+
+        pop();
+        push(r);
     }
 
     protected void pushMemory(){
