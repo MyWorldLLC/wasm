@@ -161,6 +161,18 @@ public class WasmBinaryModule {
                 .findFirst();
     }
 
+    public Optional<String> getExportedGlobalName(GlobalId id){
+        if(exportSection == null){
+            return Optional.empty();
+        }
+
+        return Arrays.stream(exportSection)
+                .filter(e -> e.descriptor().type() == ExportDescriptor.Type.GLOBAL_ID
+                        && e.descriptor().globalId().equals(id))
+                .map(Export::name)
+                .findFirst();
+    }
+
     public Optional<Import> getImport(FunctionId function){
         if(importSection == null){
             return Optional.empty();

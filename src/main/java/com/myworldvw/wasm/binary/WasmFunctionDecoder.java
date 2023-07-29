@@ -24,22 +24,28 @@ public class WasmFunctionDecoder {
         blockTypes = new Stack<>();
     }
 
+    public WasmFunctionDecoder(ByteBuffer code){
+        this.code = code;
+        this.type = null;
+        this.blockTypes = new Stack<>();
+    }
+
     public void decode(CodeVisitor visitor) throws WasmFormatException {
         visitor.visitFunction(type);
         visitor.visitLocals(decodeLocalVec());
         decodeExpression(visitor);
     }
 
-    protected void decodeExpression(CodeVisitor visitor) throws WasmFormatException {
+    public void decodeExpression(CodeVisitor visitor) throws WasmFormatException {
 
         while(code.hasRemaining()){
             var opcode = code.get();
             switch (opcode){
                 case UNREACHABLE, NOP, RETURN -> visitor.visitCtrl(opcode);
                 case END -> {
-                    if(blockTypes.isEmpty()){
+                    if(blockTypes.isEmpty() && type != null){
                         visitor.exitFunction();
-                    }else{
+                    }else if(!blockTypes.empty()){
                         visitor.exitBlock();
                         blockTypes.pop();
                     }

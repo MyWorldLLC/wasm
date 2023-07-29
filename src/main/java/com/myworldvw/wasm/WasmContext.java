@@ -3,6 +3,7 @@ package com.myworldvw.wasm;
 import com.myworldvw.wasm.binary.Import;
 import com.myworldvw.wasm.binary.WasmBinaryModule;
 import com.myworldvw.wasm.binary.WasmModuleDecoder;
+import com.myworldvw.wasm.globals.Global;
 import com.myworldvw.wasm.jvm.JvmCompiler;
 import com.myworldvw.wasm.jvm.JvmCompilerConfig;
 
@@ -62,9 +63,9 @@ public class WasmContext {
                 var field = fieldForImport(instance, required);
                 switch (required.descriptor().type()){
                     case TYPE_ID -> field.set(instance, imports.getFunction(required.module(), required.name()));
-                    case MEMORY_TYPE -> field.set(imports, imports.getMemory(required.module(), required.name()));
-                    case TABLE_TYPE -> field.set(imports, imports.getTable(required.module(), required.name()));
-                    case GLOBAL_TYPE -> field.set(imports, null); // TODO
+                    case MEMORY_TYPE -> field.set(instance, imports.getMemory(required.module(), required.name()));
+                    case TABLE_TYPE -> field.set(instance, imports.getTable(required.module(), required.name()));
+                    case GLOBAL_TYPE -> field.set(instance, imports.getGlobal(required.module(), required.name()));
                 }
             }
         }
@@ -86,7 +87,7 @@ public class WasmContext {
                     case TYPE_ID -> f.getType().equals(MethodHandle.class);
                     case TABLE_TYPE -> f.getType().equals(Table.class);
                     case MEMORY_TYPE -> f.getType().equals(Memory.class);
-                    case GLOBAL_TYPE -> false; // TODO
+                    case GLOBAL_TYPE -> Global.class.isAssignableFrom(f.getType());
                 })
                 .findFirst()
                 .orElse(null);
@@ -103,6 +104,22 @@ public class WasmContext {
                 .map(m -> {
                     try {
                         return MethodHandles.lookup().unreflect(m).bindTo(module);
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException(e); // TODO
+                    }
+                });
+    }
+
+    public Optional<Global<?>> getExportedGlobal(String moduleName, String globalName){
+        var module = findInstance(moduleName);
+
+        return Arrays.stream(module.getClass().getDeclaredFields())
+                .filter(f -> f.isAnnotationPresent(WasmExport.class))
+                .filter(f -> f.getName().equals(globalName))
+                .findFirst()
+                .map(f -> {
+                    try {
+                        return (Global<?>) f.get(module);
                     } catch (IllegalAccessException e) {
                         throw new RuntimeException(e); // TODO
                     }

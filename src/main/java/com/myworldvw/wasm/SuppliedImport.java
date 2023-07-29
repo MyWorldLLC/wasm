@@ -1,5 +1,7 @@
 package com.myworldvw.wasm;
 
+import com.myworldvw.wasm.globals.Global;
+
 import java.lang.invoke.MethodHandle;
 
 public record SuppliedImport(String module, String name, Object payload) {
@@ -17,7 +19,7 @@ public record SuppliedImport(String module, String name, Object payload) {
     }
 
     public boolean isGlobal(){
-        return false; // TODO
+        return payload instanceof Global;
     }
 
 }

@@ -1,5 +1,7 @@
 package com.myworldvw.wasm;
 
+import com.myworldvw.wasm.globals.Global;
+
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,9 +48,15 @@ public class Imports {
                 .orElseThrow(() -> new MissingImportException(module, name, "table"));
     }
 
-    public Imports global(String module, String name, Object global){
-        // TODO
+    public <T extends Global<?>> Imports global(String module, String name, T global){
+        imports.add(new SuppliedImport(module, name, global));
         return this;
+    }
+
+    public Global<?> getGlobal(String module, String name) throws MissingImportException {
+        return getImported(module, name, SuppliedImport::isGlobal)
+                .map(p -> (Global<?>) p)
+                .orElseThrow(() -> new MissingImportException(module, name, "global"));
     }
 
     protected Optional<Object> getImported(String module, String name, Predicate<SuppliedImport> typeCheck){

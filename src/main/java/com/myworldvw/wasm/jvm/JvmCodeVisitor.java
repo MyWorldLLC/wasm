@@ -2,16 +2,18 @@ package com.myworldvw.wasm.jvm;
 
 import com.myworldvw.wasm.Memory;
 import com.myworldvw.wasm.WasmModule;
-import com.myworldvw.wasm.binary.CodeVisitor;
-import com.myworldvw.wasm.binary.FunctionType;
-import com.myworldvw.wasm.binary.ValueType;
-import com.myworldvw.wasm.binary.WasmBinaryModule;
+import com.myworldvw.wasm.binary.*;
+import com.myworldvw.wasm.globals.F32Global;
+import com.myworldvw.wasm.globals.F64Global;
+import com.myworldvw.wasm.globals.I32Global;
+import com.myworldvw.wasm.globals.I64Global;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
+import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
 
@@ -24,6 +26,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     protected final WasmBinaryModule module;
     protected final String moduleClassName;
     protected final FunctionInfo[] functionTable;
+    protected final List<GlobalInfo> globalTable;
 
     protected final MethodVisitor code;
     protected FunctionType signature;
@@ -33,14 +36,19 @@ public class JvmCodeVisitor implements CodeVisitor {
     protected final Stack<ValueType> operands;
     protected ValueType[] locals;
 
-    public JvmCodeVisitor(WasmBinaryModule module, String moduleClassName, FunctionInfo[] functionTable, MethodVisitor code){
+    public JvmCodeVisitor(WasmBinaryModule module, String moduleClassName, FunctionInfo[] functionTable, List<GlobalInfo> globalTable, MethodVisitor code){
         this.module = module;
         this.moduleClassName = moduleClassName;
         this.functionTable = functionTable;
+        this.globalTable = globalTable;
         this.code = code;
         blockTypes = new Stack<>();
         blockLabels = new Stack<>();
         operands = new Stack<>();
+    }
+
+    public Optional<ValueType> peek(){
+        return operands.empty() ? Optional.empty() : Optional.of(operands.peek());
     }
 
     @Override
@@ -139,10 +147,11 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitVar(byte opcode, int id) {
-        var type = paramOrLocal(id);
-        id = id + 1; // offset by 1 since l0 is always 'this'
         switch (opcode){
             case LOCAL_GET -> {
+                var type = paramOrLocal(id);
+                id = id + 1; // offset by 1 since l0 is always 'this'
+
                 push(type);
                 switch (type){
                     case I32 -> code.visitVarInsn(Opcodes.ILOAD, id);
@@ -152,6 +161,9 @@ public class JvmCodeVisitor implements CodeVisitor {
                 }
             }
             case LOCAL_SET -> {
+                var type = paramOrLocal(id);
+                id = id + 1; // offset by 1 since l0 is always 'this'
+
                 pop();
                 switch (type){
                     case I32 -> code.visitVarInsn(Opcodes.ISTORE, id);
@@ -161,6 +173,10 @@ public class JvmCodeVisitor implements CodeVisitor {
                 }
             }
             case LOCAL_TEE -> {
+
+                var type = paramOrLocal(id);
+                id = id + 1; // offset by 1 since l0 is always 'this'
+
                 switch (operands.peek()){
                     case I32, F32 -> code.visitInsn(Opcodes.DUP);
                     case I64, F64 -> code.visitInsn(Opcodes.DUP2);
@@ -172,8 +188,15 @@ public class JvmCodeVisitor implements CodeVisitor {
                     case F64 -> code.visitVarInsn(Opcodes.DSTORE, id);
                 }
             }
-            case GLOBAL_GET, GLOBAL_SET -> {
-                // TODO
+            case GLOBAL_GET -> {
+                var global = globalTable.get(id);
+                push(global.type().valueType());
+                makeGlobalAccess(true, global.fieldName(), global.type());
+            }
+            case GLOBAL_SET -> {
+                var global = globalTable.get(id);
+                pop();
+                makeGlobalAccess(false, global.fieldName(), global.type());
             }
         }
     }
@@ -499,5 +522,15 @@ public class JvmCodeVisitor implements CodeVisitor {
 
         pop();
         pop();
+    }
+
+    protected void makeGlobalAccess(boolean load, String fieldName, GlobalType type){
+        var method = load ? "get$" + fieldName : "set$" + fieldName;
+        var descriptor = load
+                ? Type.getMethodDescriptor(JvmCompiler.toJvmType(type.valueType()), Type.getType(JvmCompiler.classNameToDescriptor(moduleClassName)))
+                : Type.getMethodDescriptor(Type.VOID_TYPE, JvmCompiler.toJvmType(type.valueType()), Type.getType(JvmCompiler.classNameToDescriptor(moduleClassName)));
+
+        code.visitVarInsn(Opcodes.ALOAD, 0);
+        code.visitMethodInsn(Opcodes.INVOKESTATIC, moduleClassName, method, descriptor, false);
     }
 }

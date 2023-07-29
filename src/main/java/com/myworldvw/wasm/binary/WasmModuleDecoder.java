@@ -1,5 +1,6 @@
 package com.myworldvw.wasm.binary;
 
+import com.myworldvw.wasm.globals.Mutability;
 import com.myworldvw.wasm.util.Leb128;
 
 import java.nio.ByteBuffer;

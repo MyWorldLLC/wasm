@@ -3,7 +3,6 @@ package com.myworldvw.wasm;
 import com.myworldvw.wasm.util.WasmLoader;
 import org.junit.jupiter.api.Test;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

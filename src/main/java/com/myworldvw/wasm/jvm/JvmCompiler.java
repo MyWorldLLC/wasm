@@ -5,6 +5,7 @@ import com.myworldvw.wasm.WasmExport;
 import com.myworldvw.wasm.WasmImport;
 import com.myworldvw.wasm.WasmModule;
 import com.myworldvw.wasm.binary.*;
+import com.myworldvw.wasm.globals.*;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -13,6 +14,7 @@ import org.objectweb.asm.Type;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 public class JvmCompiler {
@@ -61,7 +63,11 @@ public class JvmCompiler {
                 Type.getMethodDescriptor(Type.VOID_TYPE), null, null);
         initializer.visitCode();
 
-        // TODO - visit global, element, & data sections & perform applicable initialization.
+        // generate global fields (and initialization code for local globals)
+        var globals = generateGlobals(moduleWriter, module.getName(), initializer, module, functions);
+
+        // TODO - decode/populate elements
+        // TODO - decode/apply data segments
 
         initializer.visitInsn(Opcodes.RETURN);
 
@@ -131,7 +137,7 @@ public class JvmCompiler {
 
             if(function.exported()){
                 var exportVisitor = methodWriter.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
-                exportVisitor.visit("functionId", id.id());
+                exportVisitor.visit("id", id.id());
                 exportVisitor.visitEnd();
             }
 
@@ -151,7 +157,7 @@ public class JvmCompiler {
                 // If local, compile the function body
                 var code = module.getCodeSection();
                 var decoder = new WasmFunctionDecoder(code[i - firstLocalFunctionId], module.typeForFunction(id));
-                decoder.decode(new JvmCodeVisitor(module, module.getName(), functions, methodWriter)); // TODO - support packaged/prefixed class name
+                decoder.decode(new JvmCodeVisitor(module, module.getName(), functions, globals, methodWriter)); // TODO - support packaged/prefixed class name
             }
 
             methodWriter.visitMaxs(0, 0);
@@ -196,6 +202,151 @@ public class JvmCompiler {
         return new FunctionInfo(module.getName(), name, type, importedType.isPresent(), isExported);
     }
 
+    public List<GlobalInfo> generateGlobals(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
+
+        var globals = new ArrayList<GlobalInfo>();
+
+        int id = 0;
+        if(module.getImportSection() != null){
+
+            var globalImports = Arrays.stream(module.getImportSection())
+                    .filter(i -> i.descriptor().type() == ImportDescriptor.Type.GLOBAL_TYPE)
+                    .toArray(Import[]::new);
+
+            for(var i : globalImports){
+                var export = module.getExportedGlobalName(new GlobalId(id));
+                // WasmContext will initialize, so we don't need to
+                var fieldName = generateGlobalField(moduleWriter, id, i.descriptor().globalType(), i, export.orElse(null));
+
+                globals.add(new GlobalInfo(i.module(), i.name(), fieldName, i.descriptor().globalType()));
+
+                id++;
+            }
+        }
+
+        if(module.getGlobalSection() != null){
+
+            var decoder = new WasmGlobalDecoder(module.getGlobalSection());
+
+            var localGlobalCount = decoder.decodeGlobalCount();
+            for(int i = 0; i < localGlobalCount; i++, id++){
+                var export = module.getExportedGlobalName(new GlobalId(id));
+                var type = decoder.decodeGlobalType();
+                var fieldName = generateGlobalField(moduleWriter, id, type, null, export.orElse(null));
+
+                var jvmStorageType = switch (type.valueType()){
+                    case I32 -> I32Global.class;
+                    case I64 -> I64Global.class;
+                    case F32 -> F32Global.class;
+                    case F64 -> F64Global.class;
+                };
+
+                var jvmParamType = switch (type.valueType()){
+                    case I32 -> int.class;
+                    case I64 -> long.class;
+                    case F32 -> float.class;
+                    case F64 -> double.class;
+                };
+
+                var factoryMethod = switch (type.mutability()){
+                    case VAR -> "mutable";
+                    case CONST -> "immutable";
+                };
+
+                moduleInit.visitVarInsn(Opcodes.ALOAD, 0);
+                var ranInit = decoder.decodeInitializer(new JvmCodeVisitor(module, moduleClassName, functions, globals, moduleInit));
+
+                var params = ranInit
+                        ? new Type[]{Type.getType(jvmParamType)}
+                        : new Type[]{};
+
+                moduleInit.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(jvmStorageType),
+                        factoryMethod,
+                        Type.getMethodDescriptor(Type.getType(jvmStorageType), params),
+                        false);
+                moduleInit.visitFieldInsn(Opcodes.PUTFIELD, moduleClassName, fieldName, Type.getDescriptor(jvmStorageType));
+
+                globals.add(new GlobalInfo(null, null, fieldName, type));
+            }
+
+        }
+
+        for(var global : globals){
+            generateStaticGlobalAccessor(moduleWriter, moduleClassName, global, true);
+            generateStaticGlobalAccessor(moduleWriter, moduleClassName, global, false);
+        }
+
+        return globals;
+    }
+
+    public String generateGlobalField(ClassWriter moduleWriter, int id, GlobalType type, Import i, String exportName){
+        var imported = i != null;
+        var exported = exportName != null;
+        var name = exported ? exportName : "global$" + id;
+
+        var storageType = globalType(type.valueType());
+
+        var field = moduleWriter.visitField(
+                exported || imported ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PRIVATE,
+                name,
+                Type.getDescriptor(storageType),
+                null,
+                null
+        );
+
+        if(imported){
+            var annotation = field.visitAnnotation(Type.getDescriptor(WasmImport.class), true);
+            annotation.visit("module", i.module());
+            annotation.visit("name", i.name());
+            annotation.visitEnd();
+        }
+
+        if(exported){
+            var annotation = field.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
+            annotation.visit("id", id);
+            annotation.visitEnd();
+        }
+
+        return name;
+    }
+
+    public static void generateStaticGlobalAccessor(ClassWriter moduleWriter, String moduleClassName, GlobalInfo global, boolean set){
+        var methodName = (set ? "set$" : "get$") + global.fieldName();
+        var invoker = moduleWriter.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC,
+                methodName, globalAccessorHelperDescriptor(set, global.type().valueType(), moduleClassName), null, null);
+
+        // Get the global from the module field, and invoke setValue()
+        var moduleParam = set ? 1 : 0;
+        invoker.visitVarInsn(Opcodes.ALOAD, moduleParam);
+        invoker.visitFieldInsn(Opcodes.GETFIELD, moduleClassName, global.fieldName(),
+                Type.getDescriptor(globalType(global.type().valueType())));
+
+        if(set){
+            // invoke the global carrier's set method
+            invoker.visitVarInsn(loadOpcode(global.type().valueType()), 0);
+            invoker.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    Type.getInternalName(globalType(global.type().valueType())),
+                    "setValue",
+                    Type.getMethodDescriptor(Type.VOID_TYPE, toJvmType(global.type().valueType())),
+                    false
+            );
+
+            makeReturn(invoker, Optional.empty());
+        }else{
+            // invoke the global carrier's get method
+            invoker.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                    Type.getInternalName(globalType(global.type().valueType())),
+                    "getValue",
+                    Type.getMethodDescriptor(toJvmType(global.type().valueType())),
+                    false
+            );
+            makeReturn(invoker, Optional.of(global.type().valueType()));
+        }
+
+        invoker.visitEnd();
+        invoker.visitMaxs(0, 0);
+    }
+
     public static Type toJvmType(ValueType t){
         return switch (t){
             case I32 -> Type.INT_TYPE;
@@ -220,6 +371,21 @@ public class JvmCompiler {
         );
     }
 
+    public static Class<? extends Global<?>> globalType(ValueType type){
+        return switch (type) {
+            case I32 -> I32Global.class;
+            case I64 -> I64Global.class;
+            case F32 -> F32Global.class;
+            case F64 -> F64Global.class;
+        };
+    }
+
+    public static String globalAccessorHelperDescriptor(boolean set, ValueType type, String moduleClassName){
+        var gType = toJvmType(type);
+        return set ? Type.getMethodDescriptor(Type.VOID_TYPE, gType, Type.getType(classNameToDescriptor(moduleClassName)))
+                : Type.getMethodDescriptor(gType, Type.getType(classNameToDescriptor(moduleClassName)));
+    }
+
     public static String invokerHelperDescriptor(FunctionType type, String moduleClassName){
         var types = toJvmTypes(type.params());
         var pTypes = Arrays.copyOf(types, types.length + 1);
@@ -240,6 +406,15 @@ public class JvmCompiler {
                 case F64 -> code.visitVarInsn(Opcodes.DLOAD, i + offset);
             }
         }
+    }
+
+    public static int loadOpcode(ValueType type){
+        return switch (type){
+                case I32 -> Opcodes.ILOAD;
+                case I64 -> Opcodes.LLOAD;
+                case F32 -> Opcodes.FLOAD;
+                case F64 -> Opcodes.DLOAD;
+            };
     }
 
     public static void makeReturn(MethodVisitor code, Optional<ValueType> rType){
