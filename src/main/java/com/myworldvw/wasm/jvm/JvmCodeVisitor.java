@@ -123,6 +123,7 @@ public class JvmCodeVisitor implements CodeVisitor {
         if(opcode == IF){
             code.visitLdcInsn(0);
             code.visitJumpInsn(Opcodes.IFEQ, elseTarget);
+            pop();
         }
     }
 
@@ -147,6 +148,7 @@ public class JvmCodeVisitor implements CodeVisitor {
                         .mapToObj(this::getLabel)
                         .toArray(Label[]::new);
         code.visitTableSwitchInsn(0, labelIds.length - 1, getLabel(defaultTarget), labels);
+        pop();
     }
 
     @Override
