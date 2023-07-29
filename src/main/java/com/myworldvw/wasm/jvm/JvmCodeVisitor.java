@@ -535,7 +535,37 @@ public class JvmCodeVisitor implements CodeVisitor {
             case F64_COPYSIGN -> fCopysign(ValueType.F64);
 
             // Numeric Conversions
-            // TODO
+            case I32_WRAP_I64 -> {
+
+            }
+            case I32_TRUNC_F32_S -> trunc(ValueType.I32, ValueType.F32, true);
+            case I32_TRUNC_F32_U -> trunc(ValueType.I32, ValueType.F32, false);
+            case I32_TRUNC_F64_S -> trunc(ValueType.I32, ValueType.F64, true);
+            case I32_TRUNC_F64_U -> trunc(ValueType.I32, ValueType.F64, false);
+            case I64_EXTEND_I32_S -> iExtend(true);
+            case I64_EXTEND_I32_U -> iExtend(false);
+            case I64_TRUNC_F32_S -> trunc(ValueType.I64, ValueType.F32, true);
+            case I64_TRUNC_F32_U -> trunc(ValueType.I64, ValueType.F32, false);
+            case I64_TRUNC_F64_S -> trunc(ValueType.I64, ValueType.F64, true);
+            case I64_TRUNC_F64_U -> trunc(ValueType.I64, ValueType.F64, false);
+            case F32_CONVERT_I32_S -> fConvert(ValueType.F32, ValueType.I32, true);
+            case F32_CONVERT_I32_U -> fConvert(ValueType.F32, ValueType.I32, false);
+            case F32_CONVERT_I64_S -> fConvert(ValueType.F32, ValueType.I64, true);
+            case F32_CONVERT_I64_U -> fConvert(ValueType.F32, ValueType.I64, false);
+            case F32_DEMOTE_F64 -> {
+
+            }
+            case F64_CONVERT_I32_S -> fConvert(ValueType.F64, ValueType.I32, true);
+            case F64_CONVERT_I32_U -> fConvert(ValueType.F64, ValueType.I32, false);
+            case F64_CONVERT_I64_S -> fConvert(ValueType.F64, ValueType.I64, true);
+            case F64_CONVERT_I64_U -> fConvert(ValueType.F64, ValueType.I64, false);
+            case F64_PROMOTE_F32 -> {
+
+            }
+            case I32_REINTERPRET_F32 -> reinterpret(ValueType.I32, ValueType.F32);
+            case I64_REINTERPRET_F64 -> reinterpret(ValueType.I64, ValueType.F64);
+            case F32_REINTERPRET_I32 -> reinterpret(ValueType.F32, ValueType.I32);
+            case F64_REINTERPRET_I64 -> reinterpret(ValueType.F64, ValueType.I64);
         }
     }
 
