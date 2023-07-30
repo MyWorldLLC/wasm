@@ -16,7 +16,7 @@ import static com.myworldvw.wasm.binary.WasmOpcodes.*;
 public class JvmCodeVisitor implements CodeVisitor {
 
     enum BlockType {BLOCK, LOOP, IF}
-    record BlockInfo(BlockType type, int stackDepth, Label label, Label elseTarget){}
+    record BlockInfo(BlockType type, int stackDepth, Label label){}
 
     protected final WasmBinaryModule module;
     protected final String moduleClassName;
@@ -73,7 +73,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     public void exitBlock() {
         // Exiting an internal block
         var block = blockLabels.pop();
-        if(block.type() == BlockType.BLOCK){
+        if(block.type() == BlockType.BLOCK || block.type() == BlockType.IF){
             code.visitLabel(block.label());
         }
         while (operands.size() > block.stackDepth()){
@@ -98,15 +98,12 @@ public class JvmCodeVisitor implements CodeVisitor {
         // TODO - check if operand stack needs to be popped as part of any jump
 
         if(opcode == ELSE){
-            // If bytecode is well-formed, this will never NPE.
-            code.visitLabel(blockLabels.peek().elseTarget());
             return;
         }
 
         blockTypes.push(blockType);
 
         var label = new Label();
-        var elseTarget = new Label();
 
         if(opcode == LOOP){
             code.visitLabel(label);
@@ -119,11 +116,11 @@ public class JvmCodeVisitor implements CodeVisitor {
             default -> BlockType.BLOCK;
         };
 
-        blockLabels.push(new BlockInfo(infoType, operands.size(), label, elseTarget));
+        blockLabels.push(new BlockInfo(infoType, operands.size(), label));
 
         if(opcode == IF){
             code.visitLdcInsn(0);
-            code.visitJumpInsn(Opcodes.IFEQ, elseTarget);
+            code.visitJumpInsn(Opcodes.IFEQ, label);
             pop();
         }
     }
