@@ -1,9 +1,6 @@
 package com.myworldvw.wasm.jvm;
 
-import com.myworldvw.wasm.Table;
-import com.myworldvw.wasm.WasmExport;
-import com.myworldvw.wasm.WasmImport;
-import com.myworldvw.wasm.WasmModule;
+import com.myworldvw.wasm.*;
 import com.myworldvw.wasm.binary.*;
 import com.myworldvw.wasm.globals.*;
 import org.objectweb.asm.ClassWriter;
@@ -66,8 +63,13 @@ public class JvmCompiler {
         // generate global fields (and initialization code for local globals)
         var globals = generateGlobals(moduleWriter, module.getName(), initializer, module, functions);
 
-        // TODO - decode/populate elements
-        // TODO - decode/apply data segments
+        if(module.getElementSection() != null){
+            generateElements(moduleWriter, module.getName(), initializer, module, functions);
+        }
+
+        if(module.getDataSection() != null){
+            generateData(moduleWriter, module.getName(), initializer, module, functions);
+        }
 
         initializer.visitInsn(Opcodes.RETURN);
 
@@ -139,6 +141,11 @@ public class JvmCompiler {
                 var exportVisitor = methodWriter.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
                 exportVisitor.visit("id", id.id());
                 exportVisitor.visitEnd();
+            }
+
+            if(module.getStart() != null && module.getStart().equals(id)){
+                methodWriter.visitAnnotation(Type.getDescriptor(WasmStart.class), true)
+                        .visitEnd();
             }
 
             methodWriter.visitCode();
@@ -345,6 +352,20 @@ public class JvmCompiler {
 
         invoker.visitEnd();
         invoker.visitMaxs(0, 0);
+    }
+
+    public void generateElements(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
+        var decoder = new WasmElementsDecoder(module.getElementSection());
+
+        var elementCounts = decoder.decodeElementCount();
+        for(int i = 0; i < elementCounts; i++){
+            // TODO - get the JVM stack set up, evaluate the offset and the ids vector,
+            // and call to set
+        }
+    }
+
+    public void generateData(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
+        // TODO - identical process as elements, but with a byte vector being set in memory
     }
 
     public static Type toJvmType(ValueType t){
