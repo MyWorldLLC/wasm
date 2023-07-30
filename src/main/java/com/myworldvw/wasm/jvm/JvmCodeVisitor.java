@@ -583,7 +583,7 @@ public class JvmCodeVisitor implements CodeVisitor {
         if(id < signature.params().length){
             return signature.params()[id];
         }
-        return locals[id];
+        return locals[id - signature.params().length];
     }
 
     protected void testIntEquality(ValueType t){

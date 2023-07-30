@@ -235,7 +235,7 @@ public class WasmModuleDecoder {
         int pos = wasm.position();
         var nameSize = decodeU32();
         wasm.position(pos);
-        return new CustomSection(decodeName(), readBytes(sectionSize - nameSize));
+        return new CustomSection(decodeName(), readBytes(sectionSize - nameSize - 1));
     }
 
     public FunctionType[] decodeTypeSection() throws WasmFormatException {
