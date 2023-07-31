@@ -9,32 +9,32 @@
   (local $1 i32)
   (local $2 i32)
   (local $3 i32)
-  i32.const 1  ;; 1
-  local.set $1 ;; 0
-  local.get $0 ;; 1
-  i32.const 0  ;; 2
-  i32.gt_s     ;; 1
-  if           ;; 0
+  i32.const 1
+  local.set $1
+  local.get $0
+  i32.const 0
+  i32.gt_s
+  if
    loop $while-continue|0
-    local.get $0  ;; 1
-    i32.const 1   ;; 2
-    i32.sub       ;; 1
-    local.tee $0  ;; 1
-    if            ;; 0
-     local.get $1 ;; 1
-     local.get $2 ;; 2
-     i32.add      ;; 1
-     local.set $3 ;; 0
-     local.get $1 ;; 1
-     local.set $2 ;; 0
-     local.get $3 ;; 1
-     local.set $1 ;; 0
+    local.get $0
+    i32.const 1
+    i32.sub
+    local.tee $0
+    if
+     local.get $1
+     local.get $2
+     i32.add
+     local.set $3
+     local.get $1
+     local.set $2
+     local.get $3
+     local.set $1
      br $while-continue|0
     end
    end
-   local.get $1   ;; 1
-   return         ;; return
+   local.get $1
+   return
   end
-  i32.const 0     ;; 1
+  i32.const 0
  )
 )
