@@ -67,6 +67,26 @@ public class JvmCodeVisitor implements CodeVisitor {
     @Override
     public void visitLocals(ValueType[] locals) {
         this.locals = locals;
+        for(int i = 0; i < locals.length; i++){
+            switch (locals[i]){
+                case I32 -> {
+                    code.visitLdcInsn(0);
+                    code.visitVarInsn(Opcodes.ISTORE, i + 1); // +1 because 0 is always 'this' ref
+                }
+                case F32 -> {
+                    code.visitLdcInsn(0f);
+                    code.visitVarInsn(Opcodes.FSTORE, i + 1); // +1 because 0 is always 'this' ref
+                }
+                case I64 -> {
+                    code.visitLdcInsn(0L);
+                    code.visitVarInsn(Opcodes.LSTORE, i + 1); // +1 because 0 is always 'this' ref
+                }
+                case F64 -> {
+                    code.visitLdcInsn(0d);
+                    code.visitVarInsn(Opcodes.DSTORE, i + 1); // +1 because 0 is always 'this' ref
+                }
+            }
+        }
     }
 
     @Override
@@ -626,25 +646,25 @@ public class JvmCodeVisitor implements CodeVisitor {
         switch (t){
             case I32 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
-                    Type.getDescriptor(Integer.class),
+                    Type.getInternalName(Integer.class),
                     method,
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE), false);
 
             case I64 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
-                    Type.getDescriptor(Long.class),
+                    Type.getInternalName(Long.class),
                     method,
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.LONG_TYPE, Type.LONG_TYPE), false);
 
             case F32 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
-                    Type.getDescriptor(Float.class),
+                    Type.getInternalName(Float.class),
                     "compare",
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.FLOAT_TYPE, Type.FLOAT_TYPE), false);
 
             case F64 -> code.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
-                    Type.getDescriptor(Double.class),
+                    Type.getInternalName(Double.class),
                     "compare",
                     Type.getMethodDescriptor(Type.INT_TYPE, Type.DOUBLE_TYPE, Type.DOUBLE_TYPE), false);
         }
