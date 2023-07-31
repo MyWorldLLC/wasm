@@ -67,7 +67,7 @@ public class JvmCodeVisitor implements CodeVisitor {
     @Override
     public void visitLocals(ValueType[] locals) {
         this.locals = locals;
-        for(int i = 0; i < locals.length; i++){
+        for(int i = signature.params().length + 1; i < locals.length; i++){
             switch (locals[i]){
                 case I32 -> {
                     code.visitLdcInsn(0);
@@ -97,7 +97,6 @@ public class JvmCodeVisitor implements CodeVisitor {
             code.visitLabel(block.label());
         }
         while (operands.size() > block.stackDepth()){
-            operands.pop();
             pop();
         }
     }
@@ -115,7 +114,6 @@ public class JvmCodeVisitor implements CodeVisitor {
 
     @Override
     public void visitBlock(byte opcode, Optional<ValueType> blockType) {
-        // TODO - check if operand stack needs to be popped as part of any jump
 
         if(opcode == ELSE){
             return;
@@ -139,8 +137,7 @@ public class JvmCodeVisitor implements CodeVisitor {
         blockLabels.push(new BlockInfo(infoType, operands.size(), label));
 
         if(opcode == IF){
-            code.visitLdcInsn(0);
-            code.visitJumpInsn(Opcodes.IFEQ, label);
+            code.visitJumpInsn(Opcodes.IFLE, label);
             pop();
         }
     }
@@ -149,9 +146,12 @@ public class JvmCodeVisitor implements CodeVisitor {
     public void visitBranch(byte opcode, int labelId) {
         var target = getJumpTarget(labelId);
         switch (opcode){
-            case BR -> code.visitJumpInsn(Opcodes.GOTO, target.label());
+            case BR -> {
+                code.visitJumpInsn(Opcodes.GOTO, target.label());
+            }
             case BR_IF -> {
                 code.visitLdcInsn(0);
+                code.visitJumpInsn(Opcodes.IFNE, target.label());
                 code.visitJumpInsn(Opcodes.IFNE, target.label());
                 pop();
             }
@@ -590,6 +590,20 @@ public class JvmCodeVisitor implements CodeVisitor {
             case F32_REINTERPRET_I32 -> reinterpret(ValueType.F32, ValueType.I32);
             case F64_REINTERPRET_I64 -> reinterpret(ValueType.F64, ValueType.I64);
         }
+    }
+
+    protected int restoreStack(int labelId){
+        var target = getJumpTarget(labelId);
+        var count = 0;
+        while(operands.size() > target.stackDepth()){
+            switch (operands.peek()){
+                case I32, F32 -> code.visitInsn(Opcodes.POP);
+                case I64, F64 -> code.visitInsn(Opcodes.POP2);
+            }
+            pop();
+            count++;
+        }
+        return count;
     }
 
     protected void makeReturn(){

@@ -13,7 +13,7 @@ public class Fibonacci {
         ctx.instantiate("fibonacci");
         var handle = ctx.getExportedFunction("fibonacci", "fib").get();
 
-        assertEquals(3, (int) handle.invokeExact(5));
+        assertEquals(5, (int) handle.invokeExact(5));
     }
 
 }
