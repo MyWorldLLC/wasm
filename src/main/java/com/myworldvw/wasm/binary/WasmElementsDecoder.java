@@ -8,13 +8,13 @@ import java.nio.ByteOrder;
 
 public class WasmElementsDecoder {
 
-    protected final ByteBuffer wasm;
+    protected final ByteBuffer code;
 
     protected int elementCount;
 
     public WasmElementsDecoder(byte[] elementsSection){
-        wasm = ByteBuffer.wrap(elementsSection);
-        wasm.order(ByteOrder.LITTLE_ENDIAN);
+        code = ByteBuffer.wrap(elementsSection);
+        code.order(ByteOrder.LITTLE_ENDIAN);
     }
 
     public int decodeElementCount() throws WasmFormatException {
@@ -23,11 +23,28 @@ public class WasmElementsDecoder {
     }
 
     public void decodeOffsetExpr(JvmCodeVisitor visitor){
-        // TODO
+        var decoder = new WasmFunctionDecoder(code);
+        decoder.decodeExpression(visitor);
+    }
+
+    public int[] decodeIds(){
+        var size = decodeU32();
+        var ids = new int[size];
+        for(int i = 0; i < size; i++){
+            ids[i] = decodeU32();
+        }
+        return ids;
     }
 
     public int decodeU32() throws WasmFormatException {
-        return (int) Leb128.decodeUnsigned(wasm);
+        return (int) Leb128.decodeUnsigned(code);
+    }
+
+    protected byte peek(){
+        var pos = code.position();
+        var value = code.get();
+        code.position(pos);
+        return value;
     }
 
 }

@@ -147,6 +147,25 @@ public class WasmContext {
         }
     }
 
+    public static Optional<MethodHandle> getFunctionHandle(WasmModule module, int functionId) throws IllegalAccessException {
+        var method = Arrays.stream(module.getClass().getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(WasmFunction.class))
+                .filter(m -> m.getAnnotation(WasmFunction.class).id() == functionId)
+                .findFirst();
+
+        if(method.isPresent()){
+            var m = method.get();
+            m.setAccessible(true);
+            return Optional.of(MethodHandles.lookup().unreflect(m).bindTo(module));
+        }
+
+        return Optional.empty();
+    }
+
+    public static MethodHandle getFunctionHandleDirect(WasmModule module, int functionId) throws IllegalAccessException {
+        return getFunctionHandle(module, functionId).get();
+    }
+
     public static void main(String[] args){
         var wasmVm = new WasmContext();
 

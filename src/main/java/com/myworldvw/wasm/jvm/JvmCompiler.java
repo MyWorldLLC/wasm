@@ -64,7 +64,7 @@ public class JvmCompiler {
         var globals = generateGlobals(moduleWriter, module.getName(), initializer, module, functions);
 
         if(module.getElementSection() != null){
-            generateElements(moduleWriter, module.getName(), initializer, module, functions);
+            generateElements(module.getName(), initializer, module, functions, globals);
         }
 
         if(module.getDataSection() != null){
@@ -137,9 +137,12 @@ public class JvmCompiler {
                     function.name(),
                     typeToDescriptor(type), null, null);
 
+            var functionAnnotation = methodWriter.visitAnnotation(Type.getDescriptor(WasmFunction.class), true);
+            functionAnnotation.visit("id", id.id());
+            functionAnnotation.visitEnd();
+
             if(function.exported()){
                 var exportVisitor = methodWriter.visitAnnotation(Type.getDescriptor(WasmExport.class), true);
-                exportVisitor.visit("id", id.id());
                 exportVisitor.visitEnd();
             }
 
@@ -354,18 +357,48 @@ public class JvmCompiler {
         invoker.visitMaxs(0, 0);
     }
 
-    public void generateElements(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
+    public void generateElements(String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions, List<GlobalInfo> globals){
         var decoder = new WasmElementsDecoder(module.getElementSection());
 
         var elementCounts = decoder.decodeElementCount();
         for(int i = 0; i < elementCounts; i++){
-            // TODO - get the JVM stack set up, evaluate the offset and the ids vector,
-            // and call to set
+            moduleInit.visitVarInsn(Opcodes.ALOAD, 0);
+
+            moduleInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(WasmModule.class),
+                    "getTable", Type.getMethodDescriptor(Type.getType(Table.class)), false);
+
+            // Evaluate offset
+            decoder.decodeOffsetExpr(new JvmCodeVisitor(module, moduleClassName, functions, globals, moduleInit));
+
+            var idVec = decoder.decodeIds();
+
+            // Build MethodHandle[] of the functions
+            moduleInit.visitLdcInsn(idVec.length);
+            moduleInit.visitTypeInsn(Opcodes.ANEWARRAY, Type.getDescriptor(MethodHandle.class));
+            for(int id = 0; id < idVec.length; id++){
+                moduleInit.visitInsn(Opcodes.DUP);
+                moduleInit.visitLdcInsn(id);
+
+                // Get method handle
+                moduleInit.visitVarInsn(Opcodes.ALOAD, 0);
+                moduleInit.visitLdcInsn(idVec[id]);
+                moduleInit.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(WasmContext.class),
+                        "getFunctionHandleDirect",
+                        Type.getMethodDescriptor(Type.getType(MethodHandle.class),
+                                Type.getType(WasmModule.class), Type.getType(int.class)), false);
+
+                moduleInit.visitInsn(Opcodes.AASTORE);
+            }
+
+            moduleInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Table.class),
+                    "setAll",
+                    Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.getType(MethodHandle[].class)), false);
         }
     }
 
     public void generateData(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
         // TODO - identical process as elements, but with a byte vector being set in memory
+
     }
 
     public static Type toJvmType(ValueType t){

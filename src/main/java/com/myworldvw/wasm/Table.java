@@ -26,6 +26,14 @@ public class Table {
         entries[id] = handle;
     }
 
+    public void setAll(int startId, MethodHandle[] handles){
+        // Bulk assign method handles, starting from the highest index
+        // (so that we resize the backing array at most once)
+        for(int i = handles.length - 1; i >= 0; i--){
+            set(startId + i, handles[i]);
+        }
+    }
+
     public MethodHandle get(int id){
         ensureSize(id);
         return entries[id];
