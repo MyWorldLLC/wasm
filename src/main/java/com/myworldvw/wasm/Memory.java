@@ -64,6 +64,10 @@ public class Memory {
         memory.asSlice(addr, length).fill(value);
     }
 
+    public void bulkSet(int addr, byte[] data){
+        MemorySegment.copy(MemorySegment.ofArray(data), 0, memory, addr, data.length);
+    }
+
     public byte readI8(int addr){
         try{
             return memory.get(WASM_I8, addr);

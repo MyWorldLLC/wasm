@@ -68,7 +68,7 @@ public class JvmCompiler {
         }
 
         if(module.getDataSection() != null){
-            generateData(moduleWriter, module.getName(), initializer, module, functions);
+            generateData(module.getName(), initializer, module, functions, globals);
         }
 
         initializer.visitInsn(Opcodes.RETURN);
@@ -396,8 +396,40 @@ public class JvmCompiler {
         }
     }
 
-    public void generateData(ClassWriter moduleWriter, String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions){
-        // TODO - identical process as elements, but with a byte vector being set in memory
+    public void generateData(String moduleClassName, MethodVisitor moduleInit, WasmBinaryModule module, FunctionInfo[] functions, List<GlobalInfo> globals){
+        var decoder = new WasmDataDecoder(module.getDataSection());
+
+        var dataCount = decoder.decodeDataCount();
+        for(int i = 0; i < dataCount; i++){
+
+            // Unused for now, since there is at most one memory segment per module
+            var memoryId = decoder.decodeMemoryId();
+
+            moduleInit.visitVarInsn(Opcodes.ALOAD, 0);
+
+            moduleInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(WasmModule.class),
+                    "getMemory", Type.getMethodDescriptor(Type.getType(Memory.class)), false);
+
+            decoder.decodeOffsetExpr(new JvmCodeVisitor(module, moduleClassName, functions, globals, moduleInit));
+
+            var data = decoder.decodeData();
+            moduleInit.visitLdcInsn(data.length);
+            moduleInit.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_BYTE);
+            // Unfortunately there doesn't seem to be a better way to encode
+            // a potentially large data segment into the class file, though perhaps
+            // we should support handing off the byte arrays to the host to initialize
+            // the memory through more efficient means.
+            for(int b = 0; b < data.length; b++){
+                moduleInit.visitInsn(Opcodes.DUP);
+                moduleInit.visitLdcInsn(b);
+                moduleInit.visitLdcInsn(data[b]);
+                moduleInit.visitInsn(Opcodes.BASTORE);
+            }
+
+            moduleInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Memory.class),
+                    "bulkSet", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE, Type.getType(byte[].class)),
+                    false);
+        }
 
     }
 
