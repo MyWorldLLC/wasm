@@ -22,14 +22,14 @@ public class WasmContext {
     protected final List<Class<? extends WasmModule>> compiled;
     protected final List<WasmModule> instantiatedModules;
 
-    protected final WasmContextConfig config;
+    protected final WasmConfig config;
     protected final WasmClassLoader loader;
 
     public WasmContext(){
-        this(new WasmContextConfig());
+        this(new WasmConfig());
     }
 
-    public WasmContext(WasmContextConfig config){
+    public WasmContext(WasmConfig config){
         modules = new ArrayList<>();
         compiled = new ArrayList<>();
         instantiatedModules = new ArrayList<>();
@@ -38,7 +38,7 @@ public class WasmContext {
         loader = new WasmClassLoader(WasmContext.class.getClassLoader());
     }
 
-    public WasmContextConfig getConfig() {
+    public WasmConfig getConfig() {
         return config;
     }
 
@@ -194,10 +194,10 @@ public class WasmContext {
     }
 
     public static WasmContext createFromResources(String... resourcePaths) throws WasmFormatException, IOException {
-        return createFromResources(new WasmContextConfig(), resourcePaths);
+        return createFromResources(new WasmConfig(), resourcePaths);
     }
 
-    public static WasmContext createFromResources(WasmContextConfig config, String... resourcePaths)  throws WasmFormatException, IOException {
+    public static WasmContext createFromResources(WasmConfig config, String... resourcePaths)  throws WasmFormatException, IOException {
         var ctx = new WasmContext(config);
 
         for(var path : resourcePaths){

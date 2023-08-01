@@ -16,7 +16,7 @@ public class FibonacciState {
 
     @Setup(Level.Trial)
     public void init() throws Exception {
-        var config = new WasmContextConfig();
+        var config = new WasmConfig();
         config.setCompiledModulePackage("com.myworldvw.wasm.benchmark");
 
         ctx = WasmContext.createFromResources("/wasm/fibonacci.wasm");

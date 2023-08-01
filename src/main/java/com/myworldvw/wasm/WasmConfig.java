@@ -1,12 +1,12 @@
 package com.myworldvw.wasm;
 
-public class WasmContextConfig {
+public class WasmConfig {
 
     protected int trapFlags;
 
     protected String modulePackage;
 
-    public WasmContextConfig(){
+    public WasmConfig(){
     }
 
     public String getCompiledModulePackage() {

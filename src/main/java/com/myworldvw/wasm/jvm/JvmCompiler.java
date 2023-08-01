@@ -16,10 +16,10 @@ import java.util.Optional;
 
 public class JvmCompiler {
 
-    protected final WasmContextConfig config;
+    protected final WasmConfig config;
     protected final WasmClassLoader loader;
 
-    public JvmCompiler(WasmContextConfig config, WasmClassLoader loader){
+    public JvmCompiler(WasmConfig config, WasmClassLoader loader){
         this.config = config;
         this.loader = loader;
     }

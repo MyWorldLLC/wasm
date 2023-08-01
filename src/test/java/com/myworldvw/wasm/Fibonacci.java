@@ -8,7 +8,7 @@ public class Fibonacci {
 
     @Test
     void runsFibonacci() throws Throwable {
-        var config = new WasmContextConfig();
+        var config = new WasmConfig();
         config.setCompiledModulePackage("foo.bar");
 
         var ctx = WasmContext.createFromResources(config,"/wasm/fibonacci.wasm");
