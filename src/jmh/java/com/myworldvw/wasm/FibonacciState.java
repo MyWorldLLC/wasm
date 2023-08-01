@@ -16,7 +16,10 @@ public class FibonacciState {
 
     @Setup(Level.Trial)
     public void init() throws Exception {
-        ctx = WasmLoader.createFromResources("/wasm/fibonacci.wasm");
+        var config = new WasmContextConfig();
+        config.setCompiledModulePackage("com.myworldvw.wasm.benchmark");
+
+        ctx = WasmContext.createFromResources("/wasm/fibonacci.wasm");
         fibModule = ctx.instantiate("fibonacci");
         fibHandle = ctx.getExportedFunction("fibonacci", "fib").get();
     }
