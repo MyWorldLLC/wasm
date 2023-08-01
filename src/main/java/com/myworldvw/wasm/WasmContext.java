@@ -2,10 +2,11 @@ package com.myworldvw.wasm;
 
 import com.myworldvw.wasm.binary.Import;
 import com.myworldvw.wasm.binary.WasmBinaryModule;
+import com.myworldvw.wasm.binary.WasmFormatException;
 import com.myworldvw.wasm.binary.WasmModuleDecoder;
 import com.myworldvw.wasm.globals.Global;
 import com.myworldvw.wasm.jvm.JvmCompiler;
-import com.myworldvw.wasm.jvm.JvmCompilerConfig;
+import com.myworldvw.wasm.jvm.WasmClassLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,10 +22,24 @@ public class WasmContext {
     protected final List<Class<? extends WasmModule>> compiled;
     protected final List<WasmModule> instantiatedModules;
 
+    protected final WasmContextConfig config;
+    protected final WasmClassLoader loader;
+
     public WasmContext(){
+        this(new WasmContextConfig());
+    }
+
+    public WasmContext(WasmContextConfig config){
         modules = new ArrayList<>();
         compiled = new ArrayList<>();
         instantiatedModules = new ArrayList<>();
+
+        this.config = config;
+        loader = new WasmClassLoader(WasmContext.class.getClassLoader());
+    }
+
+    public WasmContextConfig getConfig() {
+        return config;
     }
 
     @SuppressWarnings("unchecked")
@@ -34,12 +49,23 @@ public class WasmContext {
 
     @SuppressWarnings("unchecked")
     public Class<? extends WasmModule> compile(WasmBinaryModule module){
-        // TODO - check for duplicates before compiling
-        var compiler = new JvmCompiler(new JvmCompilerConfig());
-        var bytes = compiler.compile(module);
-        var cls = (Class<? extends WasmModule>) compiler.getLoader().defineModuleClass(module.getName(), bytes);
-        compiled.add(cls);
-        return cls;
+
+        var compiledModuleName = config.getCompiledClassName(module.getName());
+
+        return findCompiled(module.getName())
+                .orElseGet(() -> {
+                    var compiler = new JvmCompiler(config, loader);
+                    var bytes = compiler.compile(module);
+                    var cls = (Class<? extends WasmModule>) loader.defineModuleClass(compiledModuleName, bytes);
+                    compiled.add(cls);
+                    return cls;
+                });
+    }
+
+    public Optional<Class<? extends WasmModule>> findCompiled(String module){
+        return compiled.stream()
+                .filter(c -> c.getName().equals(config.getCompiledClassName(module)))
+                .findFirst();
     }
 
     public Optional<WasmBinaryModule> findBinary(String moduleName){
@@ -56,6 +82,7 @@ public class WasmContext {
 
     public WasmModule instantiate(String name, Imports imports) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException, MissingImportException {
         var requiredImports = findBinary(name).get().getImportSection();
+
         var instance = compile(name).getConstructor(String.class, Import[].class).newInstance(name, requiredImports);
 
         if(requiredImports != null){
@@ -164,6 +191,28 @@ public class WasmContext {
 
     public static MethodHandle getFunctionHandleDirect(WasmModule module, int functionId) throws IllegalAccessException {
         return getFunctionHandle(module, functionId).get();
+    }
+
+    public static WasmContext createFromResources(String... resourcePaths) throws WasmFormatException, IOException {
+        return createFromResources(new WasmContextConfig(), resourcePaths);
+    }
+
+    public static WasmContext createFromResources(WasmContextConfig config, String... resourcePaths)  throws WasmFormatException, IOException {
+        var ctx = new WasmContext(config);
+
+        for(var path : resourcePaths){
+            try(var in = WasmContext.class.getResourceAsStream(path)){
+                var segments = path.split("/");
+                var namePiece = segments[segments.length - 1];
+
+                var name = namePiece.indexOf('.') != -1 ? namePiece.substring(0, namePiece.indexOf('.')) : namePiece;
+                ctx.loadBinary(name, in);
+            }
+        }
+
+        ctx.compileAll();
+
+        return ctx;
     }
 
     public static void main(String[] args){

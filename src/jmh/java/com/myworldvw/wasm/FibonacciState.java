@@ -1,6 +1,5 @@
 package com.myworldvw.wasm;
 
-import com.myworldvw.wasm.util.WasmLoader;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;

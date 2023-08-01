@@ -16,10 +16,12 @@ import java.util.Optional;
 
 public class JvmCompiler {
 
-    protected final JvmCompilerConfig config;
+    protected final WasmContextConfig config;
+    protected final WasmClassLoader loader;
 
-    public JvmCompiler(JvmCompilerConfig config){
+    public JvmCompiler(WasmContextConfig config, WasmClassLoader loader){
         this.config = config;
+        this.loader = loader;
     }
 
     public static void getFromTable(MethodVisitor code, int id){
@@ -30,16 +32,25 @@ public class JvmCompiler {
                 Type.getMethodDescriptor(Type.getType(MethodHandle.class), Type.INT_TYPE), false);
     }
 
-    public WasmClassLoader getLoader(){
-        return config.loader;
+    public String getInternalClassName(String name){
+        return getCompiledModuleName(name).replace('.', '/');
+    }
+
+    public String getCompiledModuleName(String name){
+        if(config.getCompiledModulePackage() != null){
+            name = config.getCompiledModulePackage() + "." + name;
+        }
+        return name;
     }
 
     public byte[] compile(WasmBinaryModule module) throws WasmFormatException {
 
+        var moduleName = getInternalClassName(module.getName());
+
         var functions = buildFunctionTable(module);
 
         var moduleWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-        moduleWriter.visit(Opcodes.V19, Opcodes.ACC_PUBLIC, module.getName(), null, Type.getInternalName(WasmModule.class), null);
+        moduleWriter.visit(Opcodes.V19, Opcodes.ACC_PUBLIC, moduleName, null, Type.getInternalName(WasmModule.class), null);
 
         var constructor = moduleWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>",
                 Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class), Type.getType(Import[].class)), null, null);
@@ -61,14 +72,14 @@ public class JvmCompiler {
         initializer.visitCode();
 
         // generate global fields (and initialization code for local globals)
-        var globals = generateGlobals(moduleWriter, module.getName(), initializer, module, functions);
+        var globals = generateGlobals(moduleWriter, moduleName, initializer, module, functions);
 
         if(module.getElementSection() != null){
-            generateElements(module.getName(), initializer, module, functions, globals);
+            generateElements(moduleName, initializer, module, functions, globals);
         }
 
         if(module.getDataSection() != null){
-            generateData(module.getName(), initializer, module, functions, globals);
+            generateData(moduleName, initializer, module, functions, globals);
         }
 
         initializer.visitInsn(Opcodes.RETURN);
@@ -98,14 +109,14 @@ public class JvmCompiler {
             // Make static invoker helper
             // ============================= Invoker =============================
             var invoker = moduleWriter.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC,
-                    "call$" + function.name(), invokerHelperDescriptor(function.type(), module.getName()), null, null);
+                    "call$" + function.name(), invokerHelperDescriptor(function.type(), moduleName), null, null);
 
             invoker.visitVarInsn(Opcodes.ALOAD, function.type().params().length); // index of appended module ref
 
             loadParams(invoker, function.type(), true);
 
             invoker.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                    module.getName(), function.name(),
+                    moduleName, function.name(),
                     typeToDescriptor(function.type()), false);
 
             makeReturn(invoker, function.type().returnType());
@@ -157,7 +168,7 @@ public class JvmCompiler {
                 // If imported, get the MethodHandle and invoke it
                 methodWriter.visitVarInsn(Opcodes.ALOAD, 0);
                 methodWriter.visitFieldInsn(Opcodes.GETFIELD,
-                        module.getName(), function.name(), Type.getDescriptor(MethodHandle.class));
+                        moduleName, function.name(), Type.getDescriptor(MethodHandle.class));
 
                 loadParams(methodWriter, type, false);
                 methodWriter.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(MethodHandle.class),
@@ -167,7 +178,7 @@ public class JvmCompiler {
                 // If local, compile the function body
                 var code = module.getCodeSection();
                 var decoder = new WasmFunctionDecoder(code[i - firstLocalFunctionId], module.typeForFunction(id));
-                decoder.decode(new JvmCodeVisitor(module, module.getName(), functions, globals, methodWriter)); // TODO - support packaged/prefixed class name
+                decoder.decode(new JvmCodeVisitor(module, moduleName, functions, globals, methodWriter));
             }
 
             methodWriter.visitMaxs(0, 0);
