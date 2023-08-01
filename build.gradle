@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'me.champeau.jmh' version '0.7.1'
 }
 
 group 'com.myworldvw'
@@ -14,6 +15,12 @@ dependencies {
     implementation 'org.ow2.asm:asm:9.5'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+}
+
+sourceSets {
+    jmh {
+        java
+    }
 }
 
 java {
